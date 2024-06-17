@@ -1,5 +1,6 @@
 import json
 import sys
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,7 +8,6 @@ from brian2 import *
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtWidgets import QApplication, QMainWindow, QScrollArea, QVBoxLayout, QWidget
-from collections import Counter
 
 defaultclock.dt = 1 * ms
 
@@ -21,7 +21,7 @@ class MiniColumn:
     n_l23(int): L2/3層のニューロン数
 
     column_id(int): このカラムに割り当てる識別番号
-    
+
     initial_weight(ndarray of shape=(n_l4, n_l23)): 初期重み
 
     time_profile(TimedArray): 時間プロファイル
@@ -58,20 +58,17 @@ class MiniColumn:
         eqs_Izhikevich2003 = """    
         dv/dt = (0.04*v**2 + 5*v + 140 - u + I + I_noise)/ms : 1 (unless refractory)
         du/dt = (a*(b*v - u))/ms : 1
-        dg_syn/dt = (-g_syn)/taugsyn : 1
         dI/dt = -I/tau_I : 1
-        I += g_syn * (v_rev - v) : 1
         I_noise : 1
         a : 1
         b : 1
         c : 1
         d : 1
         tau_I : second
-        taugsyn : second
-        v_rev : 1
         """
+        # dI/dt = -I/tau_I : 1
         neuron_params = {"LIF": {}, "Izhikevich2003": {}}
-        
+
         #! PARAMETERS
         ## LIF
         neuron_params["LIF"]["l4"] = {
@@ -103,13 +100,13 @@ class MiniColumn:
             "v_threshold": -50,  # 上記の式の値のみを入力する
             "v_reset_eqs": "v=c; u+=d",
             "v_reset": -65,  # 上記の式の値のみを入力する
-            "refractory": "0 * ms",
+            "refractory": "3 * ms",
             "neuron_type": "RS",
-            "I": 0, # 入力電流
-            "I_noise": 0, # ノイズ入力(自発発火用)
+            "I": 0,  # 入力電流
+            "I_noise": 0,  # ノイズ入力(自発発火用)
             "tau_I": 100 * ms,  # Time constant of the current
-            "tau_gsyn": 2 * ms, # コンダクタンスの時定数
-            "v_reversal": 0, # Reversal potential
+            "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
+            "v_reversal": 0,  # Reversal potential
             "method": "euler",
         }
         ### L2/3
@@ -118,31 +115,30 @@ class MiniColumn:
             "v_threshold": -50,  # 上記の式の値のみを入力する
             "v_reset_eqs": "v=c; u+=d",
             "v_reset": -65,  # 上記の式の値のみを入力する
-            "refractory": "0 * ms",
+            "refractory": "3 * ms",
             "neuron_type": "RS",
-            "I": 0, # 入力電流
-            "I_noise": 0, # ノイズ入力(自発発火用)
-            "tau_I": 100 * ms,  # Time constant of the current
-            "tau_gsyn": 2 * ms, # コンダクタンスの時定数
-            "v_reversal": 0, # Reversal potential
+            "I": 0,  # 入力電流
+            "I_noise": 0,  # ノイズ入力(自発発火用)
+            "tau_I": 80 * ms,  # Time constant of the current
             "method": "euler",
         }
         ## STDP
         stdp_params = {
-            "wmax": 1, # 最大重み
-            "alpha": 0.01, # スパイクトレースの収束地点
-            "tau_pre": 20 * ms, # 前ニューロンのスパイクトレースの時定数
-            "tau_post": 20 * ms, # 後ニューロンのスパイクトレースの時定数
-            "Apre": 0.01, # 前ニューロンのスパイクトレースのリセット値
-            "Apost": 1, # 後ニューロンのスパイクトレースのリセット値
+            "wmax": 1,  # 最大重み
+            "alpha": 0.01,  # スパイクトレースの収束地点
+            "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+            "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+            "Apre": 0.01,  # 前ニューロンのスパイクトレースのリセット値
+            "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
         }
         ## Synapse model
         synapse_model_params = {
-            "tau_post": 20 * ms, # 後ニューロンのスパイクトレースの時定数
-            "tau_pre": 20 * ms, # 前ニューロンのスパイクトレースの時定数
-            "tau_syn": 100 * ms, # シナプストレースの時定数
-            "syn_init": 1, # シナプストレースのリセット値
-            "v_rev": 0, # Reversal potential
+            "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+            "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+            "tau_syn": 100 * ms,  # シナプストレースの時定数
+            "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
+            "v_reversal": 0,  # Reversal potential
+            "syn_init": 0.4,  # シナプストレースのリセット値
         }
 
         # STDP equations
@@ -153,15 +149,19 @@ class MiniColumn:
         taupost : second
         taupre : second
         tausyn : second
+        taugsyn : second
+        v_rev : 1
         syn_init : 1
         wmax : 1
         alpha : 1
         dapre/dt = (-apre - alpha)/taupre : 1 (clock-driven)
         dapost/dt = (-apost)/taupost : 1 (clock-driven)
         dsyn/dt = (-syn)/tausyn : 1 (clock-driven)
+        dgsyn/dt = (-gsyn)/taugsyn : 1 (clock-driven)
         """
         eqs_stdp_on_pre = """
-        g_syn += 10
+        gsyn += w
+        I += syn * gsyn * (v_rev - v)
         apre = Apre
         syn = syn_init
         w = clip(w + apost, 0, wmax)
@@ -218,15 +218,11 @@ class MiniColumn:
         self.N["l4"].I = neuron_params[neuron_model]["l4"]["I"]
         self.N["l4"].tau_I = neuron_params[neuron_model]["l4"]["tau_I"]
         self.N["l4"].I_noise = neuron_params[neuron_model]["l4"]["I_noise"]
-        self.N["l4"].taugsyn = neuron_params[neuron_model]["l4"]["tau_gsyn"]
-        self.N["l4"].v_rev = neuron_params[neuron_model]["l4"]["v_reversal"]
 
         self.N["l23"].v = neuron_params[neuron_model]["l23"]["v_reset"]
         self.N["l23"].I = neuron_params[neuron_model]["l23"]["I"]
         self.N["l23"].tau_I = neuron_params[neuron_model]["l23"]["tau_I"]
         self.N["l23"].I_noise = neuron_params[neuron_model]["l23"]["I_noise"]
-        self.N["l23"].taugsyn = neuron_params[neuron_model]["l23"]["tau_gsyn"]
-        self.N["l23"].v_rev = neuron_params[neuron_model]["l23"]["v_reversal"]
 
         self.v_rest_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_reset"]
         self.v_th_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_threshold"]
@@ -275,7 +271,7 @@ class MiniColumn:
             on_pre=eqs_stdp_on_pre,
             on_post=eqs_stdp_on_post,
             delay=1 * ms,
-            method="euler"
+            method="euler",
         )
         self.S["l4->l23"].connect()
 
@@ -291,23 +287,25 @@ class MiniColumn:
 
         w_max = 1.0
         w_min = 0.0
-        
+
         # 全シナプスに対してパラメータ代入
         for synapse_key in self.S:
-            if synapse_key == "l4->l23": 
+            if synapse_key == "l4->l23":
                 # STDP固有パラメータ
-                self.S[synapse_key].w = 'rand() * (w_max - w_min) + w_min'
+                self.S[synapse_key].w = "rand() * (w_max - w_min) + w_min"
                 self.S[synapse_key].wmax = stdp_params["wmax"]
                 self.S[synapse_key].alpha = stdp_params["alpha"]
                 self.S[synapse_key].Apre = stdp_params["Apre"]
                 self.S[synapse_key].Apost = stdp_params["Apost"]
                 self.S[synapse_key].taupre = stdp_params["tau_pre"]
                 self.S[synapse_key].taupost = stdp_params["tau_post"]
-                
+
                 # シナプスモデル固有パラメータ
                 self.S[synapse_key].tausyn = synapse_model_params["tau_syn"]
                 self.S[synapse_key].syn_init = synapse_model_params["syn_init"]
-            elif synapse_key == "l4->l23_inh": # 固定パラメータ
+                self.S[synapse_key].v_rev = synapse_model_params["v_reversal"]
+                self.S[synapse_key].taugsyn = synapse_model_params["tau_gsyn"]
+            elif synapse_key == "l4->l23_inh":  # 固定パラメータ
                 self.S[synapse_key].w = 1.0
 
         # Time profileで刺激を与える場合
@@ -325,7 +323,7 @@ class MiniColumn:
         )
         self.statemon["S_l4->l23"] = StateMonitor(
             self.S["l4->l23"],
-            ["w", "apre", "apost"],
+            ["w", "apre", "apost", "gsyn"],
             record=True,
             when="after_thresholds",
         )
@@ -334,7 +332,6 @@ class MiniColumn:
 
     def run(self, duration):
         self.network.run(duration)
-        
 
     def draw_potential(
         self, neuron_num_l4=None, neuron_num_l23=None, title: str = "Membrane potential"
@@ -446,8 +443,35 @@ class MiniColumn:
             ax[i].set_xlabel("Time (ms)")
         fig.suptitle(title)
 
+    def draw_conductance(
+        self, synapse_num: list[int] = None, title: str = "Conductance"
+    ):
+        """
+        シナプスモデルのコンダクタンスのグラフを描画する．
+        """
+        if synapse_num is None:
+            neurons = range(self.n_l4 * self.n_l23)
+        else:
+            neurons = synapse_num
+        fig, ax = plt.subplots(len(neurons) + 1, 1, sharex=True, figsize=(12, 9))
+        subtitle = f" (column_id: {self.column_id}) [L4->L2/3]"
+        fig.canvas.manager.set_window_title(title + subtitle)
+        for i, j in enumerate(neurons):
+            ax[i].plot(
+                self.statemon["S_l4->l23"].t / ms,
+                self.statemon["S_l4->l23"].gsyn[j],
+                color="k",
+            )
+            ax[i].set_ylabel(f"Synapse No.{j}")
+            ax[i].set_xlabel("Time (ms)")
+            # ax[i].set_ylim(-0.5, 1.5)
+        fig.suptitle(title + subtitle)
+
     def draw_spike_trace(
-        self, pre_synapse_num:list[int]=None, post_synapse_num:list[int]=None, title: str = "Spike trace"
+        self,
+        pre_synapse_num: list[int] = None,
+        post_synapse_num: list[int] = None,
+        title: str = "Spike trace",
     ):
         """
         カラム内のすべてのニューロンのスパイクトレースをプロットする．この関数呼び出し後にplt.show()の記述が必要．
@@ -494,8 +518,10 @@ class MiniColumn:
         fig.suptitle(title + subtitle)
 
     def draw_weight_changes(
-
-        self, one_fig:bool=False, synapse_num:list[int]=None, title: str = "Synapse weight"
+        self,
+        one_fig: bool = False,
+        synapse_num: list[int] = None,
+        title: str = "Synapse weight",
     ):
         """
         シナプス重みをプロットする．この関数呼び出し後にplt.show()の記述が必要．
@@ -522,7 +548,7 @@ class MiniColumn:
             ax.set_ylabel("Weight")
             ax.set_xlabel("Time (ms)")
             ax.set_ylim(-0.1, 1.1)
-            ax.legend()
+            ax.legend(loc="upper right")
             fig.suptitle(title + subtitle)
         else:
             fig, ax = plt.subplots(len(neurons) + 1, 1, sharex=True, figsize=(12, 9))
@@ -543,31 +569,42 @@ class MiniColumn:
         すべてのシナプスの重みをヒートマップで表示し、カラーバーを追加する．
         この関数呼び出し後にplt.show()の記述が必要．
         """
-        weight_mat = np.array([self.S["l4->l23"].w[i] for i in range(self.n_l4 * self.n_l23)]).reshape(self.n_l4, self.n_l23)
+        weight_mat = np.array(
+            [self.S["l4->l23"].w[i] for i in range(self.n_l4 * self.n_l23)]
+        ).reshape(self.n_l4, self.n_l23)
         fig = plt.figure(figsize=(12, 9))
         for img in range(self.n_l23):
-            weightloop = weight_mat[:, img].reshape(int(np.sqrt(self.n_l4)), int(np.sqrt(self.n_l4)))
-            ax = fig.add_subplot(int(np.sqrt(self.n_l23)), int(np.sqrt(self.n_l23)), img+1)
-            cax = ax.matshow(weightloop, cmap='Blues')
+            weightloop = weight_mat[:, img].reshape(
+                int(np.sqrt(self.n_l4)), int(np.sqrt(self.n_l4))
+            )
+            ax = fig.add_subplot(
+                int(np.sqrt(self.n_l23)), int(np.sqrt(self.n_l23)), img + 1
+            )
+            cax = ax.matshow(weightloop, cmap="Blues")
             ax.set_xticks([])
             ax.set_yticks([])
         fig.suptitle("Synapse weight of L2/3 neurons")
         fig.canvas.manager.set_window_title("Synapse weight of L2/3 neurons")
-        plt.colorbar(cax, ax=fig.axes, orientation='vertical', fraction=0.025, pad=0.04)
-        
+        plt.colorbar(cax, ax=fig.axes, orientation="vertical", fraction=0.025, pad=0.04)
+
         # 初期重みをプロット
-        weight_mat = np.array([self.statemon["S_l4->l23"].w[i][0] for i in range(self.n_l4 * self.n_l23)]).reshape(self.n_l4, self.n_l23)
+        weight_mat = np.array(
+            [self.statemon["S_l4->l23"].w[i][0] for i in range(self.n_l4 * self.n_l23)]
+        ).reshape(self.n_l4, self.n_l23)
         fig = plt.figure(figsize=(12, 9))
         for img in range(self.n_l23):
-            weightloop = weight_mat[:, img].reshape(int(np.sqrt(self.n_l4)), int(np.sqrt(self.n_l4)))
-            ax = fig.add_subplot(int(np.sqrt(self.n_l23)), int(np.sqrt(self.n_l23)), img+1)
-            cax = ax.matshow(weightloop, cmap='Blues')
+            weightloop = weight_mat[:, img].reshape(
+                int(np.sqrt(self.n_l4)), int(np.sqrt(self.n_l4))
+            )
+            ax = fig.add_subplot(
+                int(np.sqrt(self.n_l23)), int(np.sqrt(self.n_l23)), img + 1
+            )
+            cax = ax.matshow(weightloop, cmap="Blues")
             ax.set_xticks([])
             ax.set_yticks([])
         fig.suptitle("Initial weight of L2/3 neurons")
         fig.canvas.manager.set_window_title("Initial weight of L2/3 neurons")
-        plt.colorbar(cax, ax=fig.axes, orientation='vertical', fraction=0.025, pad=0.04)
-    
+        plt.colorbar(cax, ax=fig.axes, orientation="vertical", fraction=0.025, pad=0.04)
 
     def draw_raster_plot(self, title="Raster plot"):
         """
@@ -609,19 +646,18 @@ class MiniColumn:
             "l4": self.spikemon["l4"].num_spikes / len(self.N["l4"]) / second,
             "l23": self.spikemon["l23"].num_spikes / len(self.N["l23"]) / second,
         }
-        
+
     def get_firing_rate_per_neuron(self):
         """
         各ニューロンの発火率を計算して返す．
         """
         # TODO 未完成
         firing_rates = {"l4": {}, "l23": {}}
-        
+
         # スパイクモニターのデータを取得
         print(self.spikemon["l4"].i)
         print(self.network.t)
 
-            
     def draw_firerate_map(self):
         """
         各ニューロンの発火率をマッピングしてプロットする．
@@ -630,7 +666,10 @@ class MiniColumn:
         # L4のニューロンごとの発火率を計算し、出力する
         print("spikemon", self.spikemon["l4"].num_spikes)
         print("network", self.network.t)
-        fire_rates_l4 = [self.spikemon["l4"].num_spikes[i] / (self.network.t[-1] / second) for i in range(self.n_l4)]
+        fire_rates_l4 = [
+            self.spikemon["l4"].num_spikes[i] / (self.network.t[-1] / second)
+            for i in range(self.n_l4)
+        ]
         print("L4 Fire Rates:", fire_rates_l4)
 
     def draw_plot_and_graph(self, title=None):
@@ -746,7 +785,7 @@ class MiniColumn:
         print("L2/3: ", self.spikemon["l23"].num_spikes / len(self.N["l23"]) / second)
 
         return fig
-        
+
 
 if __name__ == "__main__":
     print("This is a module for MiniColumn. You can't run this file directly.")
