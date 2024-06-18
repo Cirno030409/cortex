@@ -5,9 +5,6 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 from brian2 import *
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-from PyQt5.QtWidgets import QApplication, QMainWindow, QScrollArea, QVBoxLayout, QWidget
 
 defaultclock.dt = 1 * ms
 
@@ -15,16 +12,16 @@ defaultclock.dt = 1 * ms
 class MiniColumn:
     """
     ミニカラムモデル．
-
+    
     n_l4(int): L4層のニューロン数
 
     n_l23(int): L2/3層のニューロン数
 
     column_id(int): このカラムに割り当てる識別番号
 
-    initial_weight(ndarray of shape=(n_l4, n_l23)): 初期重み
-
     time_profile(TimedArray): 時間プロファイル
+    
+    input_neurons(PoissonGroup): 入力ニューロングループ
 
     synapse_between_same_layer(bool): 同じ層間のシナプスを作成するかどうか
     """
@@ -35,6 +32,7 @@ class MiniColumn:
         n_l23: int,
         column_id: int,
         time_profile: TimedArray = None,
+        input_neurons: PoissonGroup = None,
         synapse_between_same_layer: bool = False,
         neuron_model: str = "LIF",
     ):
@@ -135,13 +133,29 @@ class MiniColumn:
         synapse_model_params = {
             "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
             "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-            "tau_syn": 100 * ms,  # シナプストレースの時定数
+            "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": 0,  # Reversal potential
             "syn_init": 0.4,  # シナプストレースのリセット値
         }
 
-        # STDP equations
+        # Synapse equations
+        ## NOT STDP Synapse model (重みの変化がないシナプス e.g. INPUT入力用シナプスモデル)
+        syn_eqs = """
+        w : 1
+        tausyn : second
+        taugsyn : second
+        syn_init : 1
+        v_rev : 1
+        dsyn/dt = (-syn)/tausyn : 1 (clock-driven)
+        dgsyn/dt = (-gsyn)/taugsyn : 1 (clock-driven)
+        """
+        syn_eqs_on_pre = """
+        gsyn += w
+        I += syn * gsyn * (v_rev - v)
+        syn = syn_init
+        """
+        ## STDP
         eqs_stdp = """
         w : 1
         Apre : 1
@@ -180,7 +194,7 @@ class MiniColumn:
         self.spikemon = {}
         self.statemon = {}
 
-        # Neuron settings
+        #! NEURON SETTINGS ##############################################################################################
         if neuron_model == "LIF":
             eqs_neuron_model = eqs_LIF
         elif neuron_model == "Izhikevich2003":
@@ -192,6 +206,8 @@ class MiniColumn:
                 "Invalid neuron model: %s. Please choose 'LIF' or 'Izhikevich2003'."
                 % neuron_model
             )
+        ## Neuron group of INPUT (初期化)
+        self.N["input"] = input_neurons
         ## Neuron group of L4
         self.N["l4"] = NeuronGroup(
             n_l4,
@@ -262,8 +278,17 @@ class MiniColumn:
                 neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
             ]["d"]
 
-        #! Synapse settings
-        ##! L4 -> L2/3
+        #! SYNAPSE SETTINGS ##############################################################################################
+        ## INPUT -> Layer4
+        self.S["input->l4"] = Synapses(
+            self.N["input"],
+            self.N["l4"],
+            model=syn_eqs,
+            on_pre=syn_eqs_on_pre,
+            delay=1 * ms,
+        )
+        self.S["input->l4"].connect("i == j")
+        ## Layer4 -> Layer2/3
         self.S["l4->l23"] = Synapses(
             self.N["l4"],
             self.N["l23"],
@@ -275,7 +300,7 @@ class MiniColumn:
         )
         self.S["l4->l23"].connect()
 
-        ##! L4 <- L23 (Inhibitory)
+        ## L4 <- L23 (Inhibitory)
         # self.S["l23_4_inh"] = Synapses(
         #     self.N["l23"],
         #     self.N["l4"],
@@ -285,12 +310,14 @@ class MiniColumn:
         # )
         # self.S["l23_4_inh"].connect(condition="i!=j")
 
+        # シナプス重みの最大値と最小値の定義
+        ## Synapse settings
         w_max = 1.0
         w_min = 0.0
 
-        # 全シナプスに対してパラメータ代入
+        # 全シナプスに対してのパラメータ代入
         for synapse_key in self.S:
-            if synapse_key == "l4->l23":
+            if synapse_key == "l4->l23": # 用いるシナプスモデルによって必要なパラメータ代入が変わる
                 # STDP固有パラメータ
                 self.S[synapse_key].w = "rand() * (w_max - w_min) + w_min"
                 self.S[synapse_key].wmax = stdp_params["wmax"]
@@ -306,21 +333,39 @@ class MiniColumn:
                 self.S[synapse_key].v_rev = synapse_model_params["v_reversal"]
                 self.S[synapse_key].taugsyn = synapse_model_params["tau_gsyn"]
             elif synapse_key == "l4->l23_inh":  # 固定パラメータ
-                self.S[synapse_key].w = 1.0
+                self.S[synapse_key].w = 1.0 # 重みの固定
+            elif synapse_key == "input->l4":
+                self.S[synapse_key].w = 1.0 # 重みの固定
+                
+                # シナプスモデル固有パラメータ
+                self.S[synapse_key].v_rev = synapse_model_params["v_reversal"]
+                self.S[synapse_key].tausyn = synapse_model_params["tau_syn"]
+                self.S[synapse_key].syn_init = synapse_model_params["syn_init"]
+                self.S[synapse_key].taugsyn = synapse_model_params["tau_gsyn"]
 
         # Time profileで刺激を与える場合
         if time_profile is not None:
             self.N["l4"].run_regularly("I = time_profile(t)")
 
-        # Monitor settings
-        self.spikemon["l4"] = SpikeMonitor(self.N["l4"])
-        self.spikemon["l23"] = SpikeMonitor(self.N["l23"])
-        self.statemon["l4"] = StateMonitor(
-            self.N["l4"], ["v", "I"], record=True, when="after_thresholds"
-        )
-        self.statemon["l23"] = StateMonitor(
-            self.N["l23"], ["v", "I"], record=True, when="after_thresholds"
-        )
+        #! MONITOR SETTINGS ##############################################################################################
+        for neuron_key in self.N.keys(): # すべてのニューロングループのState Monitorを作成
+            if neuron_key == "input":
+                self.spikemon[neuron_key] = SpikeMonitor(self.N[neuron_key])
+
+            else:
+                self.spikemon[neuron_key] = SpikeMonitor(self.N[neuron_key])
+                self.statemon[neuron_key] = StateMonitor(
+                    self.N[neuron_key], ["v", "I"], record=True, when="after_thresholds"
+                )
+        # self.spikemon["l4"] = SpikeMonitor(self.N["l4"])
+        # self.spikemon["l23"] = SpikeMonitor(self.N["l23"])
+        # self.spikemon["input"] = SpikeMonitor(self.N["input"])
+        # self.statemon["l4"] = StateMonitor(
+        #     self.N["l4"], ["v", "I"], record=True, when="after_thresholds"
+        # )
+        # self.statemon["l23"] = StateMonitor(
+        #     self.N["l23"], ["v", "I"], record=True, when="after_thresholds"
+        # )
         self.statemon["S_l4->l23"] = StateMonitor(
             self.S["l4->l23"],
             ["w", "apre", "apost", "gsyn"],
@@ -641,11 +686,26 @@ class MiniColumn:
         ax[1].set_yticks(range(self.n_l4))
         fig.suptitle(title + subtitle)
 
-    def get_firing_rate(self):
+    def get_firing_rate(self, simulate_duration):
         return {
-            "l4": self.spikemon["l4"].num_spikes / len(self.N["l4"]) / second,
-            "l23": self.spikemon["l23"].num_spikes / len(self.N["l23"]) / second,
+            "l4": self.spikemon["l4"].count / simulate_duration,
+            "l23": self.spikemon["l23"].count / simulate_duration,
+            "input": self.spikemon["input"].count / simulate_duration,
         }
+        
+    def show_firing_rate(self, simulate_duration):
+        """
+        前ニューロンの発火率を表示する
+        
+        Args:
+            simulate_duration (int): シミュレーションの実行時間。単位はsecond
+        """
+        print("[INFO of Firing rate]")
+        rates = self.get_firing_rate(simulate_duration)
+        for neuron_key in rates.keys():
+            print(f"===  {neuron_key}  ===")
+            for i, rate in enumerate(rates[neuron_key]):
+                print(f"Neuron No.{i}: {rate}")
 
     def get_firing_rate_per_neuron(self):
         """
