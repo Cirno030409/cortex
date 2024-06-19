@@ -28,14 +28,17 @@ class MiniColumn:
 
     def __init__(
         self,
+        simulation_duration: int,
         n_l4: int,
         n_l23: int,
+        n_inhibitory: int,
         column_id: int,
         time_profile: TimedArray = None,
         input_neurons: PoissonGroup = None,
         synapse_between_same_layer: bool = False,
         neuron_model: str = "LIF",
     ):
+        self.simulation_duration = simulation_duration
         self.n_l4 = n_l4
         self.n_l23 = n_l23
         self.column_id = column_id
@@ -53,7 +56,7 @@ class MiniColumn:
         # b : vに対してuをどれくらい変化させるか
         # c : vの静止膜電位
         # d : 発火後に静止膜電位に戻るまでの時間を変化させる定数
-        eqs_Izhikevich2003 = """    
+        eqs_Izhikevich2003 = """
         dv/dt = (0.04*v**2 + 5*v + 140 - u + I + I_noise)/ms : 1 (unless refractory)
         du/dt = (a*(b*v - u))/ms : 1
         dI/dt = -I/tau_I : 1
@@ -118,6 +121,21 @@ class MiniColumn:
             "I": 0,  # 入力電流
             "I_noise": 0,  # ノイズ入力(自発発火用)
             "tau_I": 80 * ms,  # Time constant of the current
+            "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
+            "method": "euler",
+        }
+        ### Inhibitory
+        neuron_params["Izhikevich2003"]["inhibitory"] = {
+            "v_threshold_eqs": "v > -50",
+            "v_threshold": -50,  # 上記の式の値のみを入力する
+            "v_reset_eqs": "v=c; u+=d",
+            "v_reset": -65,  # 上記の式の値のみを入力する
+            "refractory": "3 * ms",
+            "neuron_type": "RS",
+            "I": 0,  # 入力電流
+            "I_noise": 0,  # ノイズ入力(自発発火用)
+            "tau_I": 80 * ms,  # Time constant of the current
+            "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
             "method": "euler",
         }
         ## STDP
@@ -129,13 +147,42 @@ class MiniColumn:
             "Apre": 0.01,  # 前ニューロンのスパイクトレースのリセット値
             "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
         }
-        ## Synapse model
-        synapse_model_params = {
+        ## Synapse models (of "input->l4", "l4->inhibitory", "inhibitory->l23")
+        synapse_model_params = {"input->l4": {}, "l4->inhibitory": {}, "inhibitory->l23": {}}
+        ### input->Layer4
+        synapse_model_params["input->l4"] = {
             "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
             "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
             "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": 0,  # Reversal potential
+            "syn_init": 0.4,  # シナプストレースのリセット値
+        }
+        ### Layer4 -> Layer2/3
+        synapse_model_params["l4->l23"] = {
+            "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+            "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+            "tau_syn": 50 * ms,  # シナプストレースの時定数
+            "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
+            "v_reversal": 0,  # Reversal potential
+            "syn_init": 0.4,  # シナプストレースのリセット値
+        }
+        ### Layer2/3 -> Inhibitory
+        synapse_model_params["l23->inhibitory"] = {
+            "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+            "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+            "tau_syn": 50 * ms,  # シナプストレースの時定数
+            "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
+            "v_reversal": 0,  # Reversal potential
+            "syn_init": 0.4,  # シナプストレースのリセット値
+        }
+        ### Inhibitory -> Layer2/3
+        synapse_model_params["inhibitory->l23"] = {
+            "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+            "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+            "tau_syn": 50 * ms,  # シナプストレースの時定数
+            "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
+            "v_reversal": -60,  # Reversal potential
             "syn_init": 0.4,  # シナプストレースのリセット値
         }
 
@@ -227,6 +274,16 @@ class MiniColumn:
             refractory=neuron_params[neuron_model]["l23"]["refractory"],
             method=neuron_params[neuron_model]["l23"]["method"],
         )
+        
+        ## Neuron group of Inhibitory
+        self.N["inhibitory"] = NeuronGroup(
+            n_inhibitory,
+            eqs_neuron_model,
+            threshold=neuron_params[neuron_model]["inhibitory"]["v_threshold_eqs"],
+            reset=neuron_params[neuron_model]["inhibitory"]["v_reset_eqs"],
+            refractory=neuron_params[neuron_model]["inhibitory"]["refractory"],
+            method=neuron_params[neuron_model]["inhibitory"]["method"],
+        )
 
         ## Set the parameters of the neurons
         ### 共通しているパラメータ
@@ -239,11 +296,11 @@ class MiniColumn:
         self.N["l23"].I = neuron_params[neuron_model]["l23"]["I"]
         self.N["l23"].tau_I = neuron_params[neuron_model]["l23"]["tau_I"]
         self.N["l23"].I_noise = neuron_params[neuron_model]["l23"]["I_noise"]
-
-        self.v_rest_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_reset"]
-        self.v_th_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_threshold"]
-        self.v_rest_for_plot_l23 = neuron_params[neuron_model]["l23"]["v_reset"]
-        self.v_th_for_plot_l23 = neuron_params[neuron_model]["l23"]["v_threshold"]
+        
+        self.N["inhibitory"].v = neuron_params[neuron_model]["inhibitory"]["v_reset"]
+        self.N["inhibitory"].I = neuron_params[neuron_model]["inhibitory"]["I"]
+        self.N["inhibitory"].tau_I = neuron_params[neuron_model]["inhibitory"]["tau_I"]
+        self.N["inhibitory"].I_noise = neuron_params[neuron_model]["inhibitory"]["I_noise"]
 
         ### モデルごとに異なるパラメータ
         if neuron_model == "LIF":
@@ -277,18 +334,33 @@ class MiniColumn:
             self.N["l23"].d = izhikevich_params[
                 neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
             ]["d"]
+            
+            self.N["inhibitory"].a = izhikevich_params[
+                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
+            ]["a"]
+            self.N["inhibitory"].b = izhikevich_params[
+                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
+            ]["b"]
+            self.N["inhibitory"].c = izhikevich_params[
+                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
+            ]["c"]
+            self.N["inhibitory"].d = izhikevich_params[
+                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
+            ]["d"]
 
         #! SYNAPSE SETTINGS ##############################################################################################
-        ## INPUT -> Layer4
+        ## Build Synapses
+        ### INPUT -> Layer4
         self.S["input->l4"] = Synapses(
             self.N["input"],
             self.N["l4"],
             model=syn_eqs,
             on_pre=syn_eqs_on_pre,
             delay=1 * ms,
+            method="euler",
         )
         self.S["input->l4"].connect("i == j")
-        ## Layer4 -> Layer2/3
+        ### Layer4 -> Layer2/3
         self.S["l4->l23"] = Synapses(
             self.N["l4"],
             self.N["l23"],
@@ -299,25 +371,35 @@ class MiniColumn:
             method="euler",
         )
         self.S["l4->l23"].connect()
-
-        ## L4 <- L23 (Inhibitory)
-        # self.S["l23_4_inh"] = Synapses(
-        #     self.N["l23"],
-        #     self.N["l4"],
-        #     model = "w : 1",
-        #     on_pre="I_post =- w",
-        #     delay=1 * ms,
-        # )
-        # self.S["l23_4_inh"].connect(condition="i!=j")
+        ### Layer2/3 -> Inhibitory
+        self.S["l23->inhibitory"] = Synapses(
+            self.N["l23"],
+            self.N["inhibitory"],
+            model=syn_eqs,
+            on_pre=syn_eqs_on_pre,
+            delay=1 * ms,
+            method="euler",
+        )
+        self.S["l23->inhibitory"].connect("i == j")
+        ### Layer2/3 <- Inhibitory
+        self.S["inhibitory->l23"] = Synapses(
+            self.N["inhibitory"],
+            self.N["l23"],
+            model=syn_eqs,
+            on_pre=syn_eqs_on_pre,
+            delay=1 * ms,
+            method="euler",
+        )
+        self.S["inhibitory->l23"].connect("i != j")
 
         # シナプス重みの最大値と最小値の定義
         ## Synapse settings
         w_max = 1.0
         w_min = 0.0
 
-        # 全シナプスに対してのパラメータ代入
+        ## 全シナプスモデルに対してのパラメータ代入
         for synapse_key in self.S:
-            if synapse_key == "l4->l23": # 用いるシナプスモデルによって必要なパラメータ代入が変わる
+            if synapse_key == "l4->l23": # 学習を行うシナプス
                 # STDP固有パラメータ
                 self.S[synapse_key].w = "rand() * (w_max - w_min) + w_min"
                 self.S[synapse_key].wmax = stdp_params["wmax"]
@@ -326,22 +408,16 @@ class MiniColumn:
                 self.S[synapse_key].Apost = stdp_params["Apost"]
                 self.S[synapse_key].taupre = stdp_params["tau_pre"]
                 self.S[synapse_key].taupost = stdp_params["tau_post"]
-
-                # シナプスモデル固有パラメータ
-                self.S[synapse_key].tausyn = synapse_model_params["tau_syn"]
-                self.S[synapse_key].syn_init = synapse_model_params["syn_init"]
-                self.S[synapse_key].v_rev = synapse_model_params["v_reversal"]
-                self.S[synapse_key].taugsyn = synapse_model_params["tau_gsyn"]
-            elif synapse_key == "l4->l23_inh":  # 固定パラメータ
-                self.S[synapse_key].w = 1.0 # 重みの固定
-            elif synapse_key == "input->l4":
+                
+            elif synapse_key == "input->l4" or synapse_key == "l23->inhibitory" or synapse_key == "inhibitory->l23":
                 self.S[synapse_key].w = 1.0 # 重みの固定
                 
-                # シナプスモデル固有パラメータ
-                self.S[synapse_key].v_rev = synapse_model_params["v_reversal"]
-                self.S[synapse_key].tausyn = synapse_model_params["tau_syn"]
-                self.S[synapse_key].syn_init = synapse_model_params["syn_init"]
-                self.S[synapse_key].taugsyn = synapse_model_params["tau_gsyn"]
+            ### ニューロングループ別のシナプスモデルパラメータを代入
+            self.S[synapse_key].v_rev = synapse_model_params[synapse_key]["v_reversal"]
+            self.S[synapse_key].tausyn = synapse_model_params[synapse_key]["tau_syn"]
+            self.S[synapse_key].syn_init = synapse_model_params[synapse_key]["syn_init"]
+            self.S[synapse_key].taugsyn = synapse_model_params[synapse_key]["tau_gsyn"]
+
 
         # Time profileで刺激を与える場合
         if time_profile is not None:
@@ -374,6 +450,12 @@ class MiniColumn:
         )
 
         self.network = Network(self.N, self.S, self.spikemon, self.statemon)
+        
+        # Save Parameters for plotting
+        self.v_rest_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_reset"]
+        self.v_th_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_threshold"]
+        self.v_rest_for_plot_l23 = neuron_params[neuron_model]["l23"]["v_reset"]
+        self.v_th_for_plot_l23 = neuron_params[neuron_model]["l23"]["v_threshold"]
 
     def run(self, duration):
         self.network.run(duration)
@@ -468,7 +550,7 @@ class MiniColumn:
         for i, j in enumerate(neurons):
             ax[i].plot(self.statemon["l4"].t / ms, self.statemon["l4"].I[j], color="k")
             ax[i].set_ylabel(f"Neuron No.{j}")
-            ax[i].set_ylim(0, 100)
+            ax[i].set_ylim(0, 120)
             ax[i].set_xlabel("Time (ms)")
         fig.suptitle(title)
 
@@ -484,7 +566,7 @@ class MiniColumn:
                 self.statemon["l23"].t / ms, self.statemon["l23"].I[j], color="k"
             )
             ax[i].set_ylabel(f"Neuron No.{j}")
-            ax[i].set_ylim(0, 100)
+            ax[i].set_ylim(0, 120)
             ax[i].set_xlabel("Time (ms)")
         fig.suptitle(title)
 
@@ -658,7 +740,7 @@ class MiniColumn:
         Args:
             title (str, optional): グラフタイトル. Defaults to None.
         """
-        fig, ax = plt.subplots(2, 1, figsize=(12, 9))
+        fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
         subtitle = f" (column_id: {self.column_id}) Upper[L2/3], Lower[L4]"
         fig.canvas.manager.set_window_title(title + subtitle)
         ax[0].scatter(
@@ -671,6 +753,7 @@ class MiniColumn:
         ax[0].set_ylabel("Neuron No")
         ax[0].set_xlabel("Time (ms)")
         ax[0].set_ylim(-0.5, self.n_l23 + 0.5)
+        ax[0].set_xlim(0, self.simulation_duration / ms)
         ax[0].set_yticks(range(self.n_l23))
 
         ax[1].scatter(
@@ -683,6 +766,7 @@ class MiniColumn:
         ax[1].set_ylabel("Neuron No")
         ax[1].set_xlabel("Time (ms)")
         ax[1].set_ylim(-0.5, self.n_l4 + 0.5)
+        ax[1].set_xlim(0, self.simulation_duration / ms)
         ax[1].set_yticks(range(self.n_l4))
         fig.suptitle(title + subtitle)
 
@@ -731,120 +815,6 @@ class MiniColumn:
             for i in range(self.n_l4)
         ]
         print("L4 Fire Rates:", fire_rates_l4)
-
-    def draw_plot_and_graph(self, title=None):
-        fig, (
-            ax_l4_spike,
-            ax_l4_apre,
-            ax_l4_apost,
-            ax_l4_voltage,
-            ax_l4_current,
-            ax_l23_spike,
-            ax_l23_voltage,
-            ax_l23_current,
-        ) = plt.subplots(8, 1, sharex=True, figsize=(12, 9))
-        plt.subplots_adjust(hspace=1.0)
-
-        # スパイクのプロット
-        ax_l4_spike.scatter(
-            self.spikemon["l4"].t / ms,
-            self.spikemon["l4"].i,
-            s=2,
-            color="k",
-            label="L4",
-        )
-        ax_l4_spike.set_ylabel("Neuron number")
-        ax_l4_spike.set_title("L4")
-
-        ax_l23_spike.scatter(
-            self.spikemon["l23"].t / ms,
-            self.spikemon["l23"].i,
-            s=2,
-            color="k",
-            label="L2/3",
-        )
-        ax_l23_spike.set_ylabel("Neuron number")
-        ax_l23_spike.set_title("L2/3")
-
-        # スパイクトレースのプロット
-        ax_l4_apre.plot(
-            self.statemon["S_l4_23"].t / ms, self.statemon["S_l4_23"].apre[0], color="k"
-        )
-        ax_l4_apost.plot(
-            self.statemon["S_l4_23"].t / ms,
-            self.statemon["S_l4_23"].apost[0],
-            color="k",
-        )
-        ax_l4_apre.set_ylabel("Apre")
-        ax_l4_apost.set_ylabel("Apost")
-
-        # 膜電位のプロット
-        ax_l4_voltage.plot(
-            self.statemon["l4"].t / ms,
-            self.statemon["l4"].v[0],
-            color="k",
-        )
-        ax_l4_voltage.set_ylabel("Voltage (mV)")
-        # ax_l4_voltage.set_ylim(-70, -40)
-        ax_l4_voltage.axhline(
-            -65, color="red", linewidth=0.5, linestyle="--", label="Resting Potential"
-        )
-        ax_l4_voltage.legend()
-
-        ax_l23_voltage.plot(
-            self.statemon["l23"].t / ms,
-            self.statemon["l23"].v[0],
-            color="k",
-        )
-        ax_l23_voltage.set_ylabel("Voltage (mV)")
-        # ax_l23_voltage.set_ylim(-70, -40)
-        ax_l23_voltage.set_xlabel("Time (ms)")
-        ax_l23_voltage.axhline(
-            -65, color="red", linewidth=0.5, linestyle="--", label="Resting Potential"
-        )
-        ax_l23_voltage.legend()
-
-        # 電流のプロット
-        ax_l4_current.plot(
-            self.statemon["l4"].t / ms, self.statemon["l4"].I[0], color="k"
-        )
-        ax_l4_current.set_ylabel("Current (pA)")
-        ax_l4_current.set_xlabel("Time (ms)")
-        ax_l4_current.set_ylim(0, 100)
-
-        ax_l23_current.plot(
-            self.statemon["l23"].t / ms, self.statemon["l23"].I[0], color="k"
-        )
-        ax_l23_current.set_ylabel("Current (pA)")
-        ax_l23_current.set_xlabel("Time (ms)")
-        ax_l23_current.set_ylim(0, 100)
-
-        # シナプス重みのプロット
-        fig2, ax_stdp_w = plt.subplots(5, 1, figsize=(12, 10))
-        for i in range(len(ax_stdp_w)):
-            ax_stdp_w[i].plot(
-                self.statemon["S_l4_23"].t / ms,
-                self.statemon["S_l4_23"].w[i],
-                color="k",
-            )
-            ax_stdp_w[i].set_ylabel(f"Weight[{i}]")
-            ax_stdp_w[i].set_xlabel("Time (ms)")
-
-        if title is not None:
-            fig.suptitle(
-                title + " Current, Voltage, and Spikes Over Time of Neuron No.[0]"
-            )
-            fig2.suptitle(title + " Synapse Weights Over Time")
-        else:
-            fig.suptitle("Neural Activity and Voltage Plots")
-            fig2.suptitle("Synapse Weights Over Time")
-
-        # 発火率
-        print("Fire rate(%s):" % title)
-        print("L4: ", self.spikemon["l4"].num_spikes / len(self.N["l4"]) / second)
-        print("L2/3: ", self.spikemon["l23"].num_spikes / len(self.N["l23"]) / second)
-
-        return fig
 
 
 if __name__ == "__main__":
