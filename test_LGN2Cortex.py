@@ -1,14 +1,14 @@
 import matplotlib.pyplot as plt
 from brian2 import *
 
-from MiniColumn import *
+from MiniColumn_fix import *
 
 mc = {}  # MiniColumnのリスト
 
 # 5x5の画素値データ
 pixel_values = []
 pixel_values.append(np.array([
-    0,   0,   0,   0,   0,
+    255,   0,   0,   0,   0,
     0,   0,   0,   0,   0,
     0, 255, 255, 255,   0,
     0,   0,   0,   0,   0,
@@ -37,7 +37,7 @@ for i in range(len(pixel_values)):
     pixel_values[i] = pixel_values[i] / 255.0
     pixel_values[i] = pixel_values[i] * max_rate
 
-input_data = TimedArray(pixel_values, dt=200 * ms)
+input_data = TimedArray(pixel_values, dt=400 * ms)
 input_neurons = PoissonGroup(25, rates="input_data(t, i)")
 
 mc[0] = MiniColumn(
@@ -62,13 +62,13 @@ print("[PLOTTING...]")
 #! =====================================================================
 
 
-mc[0].draw_current(neuron_num_l4=[11, 12, 13])
+mc[0].draw_current()
 mc[0].draw_potential(neuron_num_l4=[11, 12, 13])
 # mc[0].draw_spike_trace(pre_synapse_num=[100, 110, 120], post_synapse_num=[100, 110, 120])
-mc[0].draw_weight_changes(one_fig=True)
-mc[0].draw_weight()
+# mc[0].draw_weight_changes(one_fig=True)
+# mc[0].draw_weight()
 mc[0].draw_raster_plot()
-mc[0].draw_conductance(synapse_num=[100, 110, 120])
+# mc[0].draw_conductance()
 print(mc[0].show_firing_rate(50 * second))
 
 

@@ -59,13 +59,15 @@ class MiniColumn:
         eqs_Izhikevich2003 = """
         dv/dt = (0.04*v**2 + 5*v + 140 - u + I + I_noise)/ms : 1 (unless refractory)
         du/dt = (a*(b*v - u))/ms : 1
-        dI/dt = -I/tau_I : 1
+        dgsyn/dt = (-gsyn)/taugsyn : 1
+        I = gsyn * (v_rev - v) : 1
         I_noise : 1
         a : 1
         b : 1
         c : 1
         d : 1
-        tau_I : second
+        taugsyn : second
+        v_rev : 1
         """
         # dI/dt = -I/tau_I : 1
         neuron_params = {"LIF": {}, "Izhikevich2003": {}}
@@ -101,12 +103,13 @@ class MiniColumn:
             "v_threshold": -50,  # 上記の式の値のみを入力する
             "v_reset_eqs": "v=c; u+=d",
             "v_reset": -65,  # 上記の式の値のみを入力する
+            "v_rev": 0,
             "refractory": "3 * ms",
             "neuron_type": "RS",
-            "I": 0,  # 入力電流
             "I_noise": 0,  # ノイズ入力(自発発火用)
             "tau_I": 100 * ms,  # Time constant of the current
             "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
+            "tau_gsyn": 1 * ms,  # Time constant of the synapse
             "v_reversal": 0,  # Reversal potential
             "method": "euler",
         }
@@ -116,12 +119,12 @@ class MiniColumn:
             "v_threshold": -50,  # 上記の式の値のみを入力する
             "v_reset_eqs": "v=c; u+=d",
             "v_reset": -65,  # 上記の式の値のみを入力する
+            "v_rev": 0,
             "refractory": "3 * ms",
             "neuron_type": "RS",
-            "I": 0,  # 入力電流
             "I_noise": 0,  # ノイズ入力(自発発火用)
             "tau_I": 80 * ms,  # Time constant of the current
-            "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
+            "tau_gsyn": 1 * ms,  # Time constant of the synapse
             "method": "euler",
         }
         ### Inhibitory
@@ -130,12 +133,13 @@ class MiniColumn:
             "v_threshold": -50,  # 上記の式の値のみを入力する
             "v_reset_eqs": "v=c; u+=d",
             "v_reset": -65,  # 上記の式の値のみを入力する
+            "v_rev": -60,
             "refractory": "3 * ms",
             "neuron_type": "RS",
-            "I": 0,  # 入力電流
             "I_noise": 0,  # ノイズ入力(自発発火用)
             "tau_I": 80 * ms,  # Time constant of the current
-            "tau_gsyn": 2 * ms,  # コンダクタンスの時定数
+            "tau_syn": 50 * ms,  # Time constant of the synapse
+            "tau_gsyn": 1 * ms,  # Time constant of the synapse
             "method": "euler",
         }
         ## STDP
@@ -156,51 +160,36 @@ class MiniColumn:
             "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": 0,  # Reversal potential
-            "syn_init": 0.4,  # シナプストレースのリセット値
         }
         ### Layer4 -> Layer2/3
         synapse_model_params["l4->l23"] = {
             "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
             "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-            "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": 0,  # Reversal potential
-            "syn_init": 0.4,  # シナプストレースのリセット値
         }
         ### Layer2/3 -> Inhibitory
         synapse_model_params["l23->inhibitory"] = {
             "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
             "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-            "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": 0,  # Reversal potential
-            "syn_init": 0.4,  # シナプストレースのリセット値
         }
         ### Inhibitory -> Layer2/3
         synapse_model_params["inhibitory->l23"] = {
             "tau_post": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
             "tau_pre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-            "tau_syn": 50 * ms,  # シナプストレースの時定数
             "tau_gsyn": 1 * ms,  # コンダクタンスの時定数
             "v_reversal": -60,  # Reversal potential
-            "syn_init": 0.4,  # シナプストレースのリセット値
         }
 
         # Synapse equations
-        ## NOT STDP Synapse model (重みの変化がないシナプス e.g. INPUT入力用シナプスモデル)
+        ## synapse eqs without STDP
         syn_eqs = """
         w : 1
-        tausyn : second
-        taugsyn : second
-        syn_init : 1
-        v_rev : 1
-        dsyn/dt = (-syn)/tausyn : 1 (clock-driven)
-        dgsyn/dt = (-gsyn)/taugsyn : 1 (clock-driven)
         """
         syn_eqs_on_pre = """
         gsyn += w
-        I += syn * gsyn * (v_rev - v)
-        syn = syn_init
         """
         ## STDP
         eqs_stdp = """
@@ -209,22 +198,15 @@ class MiniColumn:
         Apost : 1
         taupost : second
         taupre : second
-        tausyn : second
-        taugsyn : second
-        v_rev : 1
-        syn_init : 1
         wmax : 1
         alpha : 1
         dapre/dt = (-apre - alpha)/taupre : 1 (clock-driven)
         dapost/dt = (-apost)/taupost : 1 (clock-driven)
-        dsyn/dt = (-syn)/tausyn : 1 (clock-driven)
-        dgsyn/dt = (-gsyn)/taugsyn : 1 (clock-driven)
+
         """
         eqs_stdp_on_pre = """
-        gsyn += w
-        I += syn * gsyn * (v_rev - v)
+        gsyn_post += w
         apre = Apre
-        syn = syn_init
         w = clip(w + apost, 0, wmax)
         """
         eqs_stdp_on_post = """
@@ -276,31 +258,26 @@ class MiniColumn:
         )
         
         ## Neuron group of Inhibitory
-        self.N["inhibitory"] = NeuronGroup(
-            n_inhibitory,
-            eqs_neuron_model,
-            threshold=neuron_params[neuron_model]["inhibitory"]["v_threshold_eqs"],
-            reset=neuron_params[neuron_model]["inhibitory"]["v_reset_eqs"],
-            refractory=neuron_params[neuron_model]["inhibitory"]["refractory"],
-            method=neuron_params[neuron_model]["inhibitory"]["method"],
-        )
+        # self.N["inhibitory"] = NeuronGroup(
+        #     n_inhibitory,
+        #     eqs_neuron_model,
+        #     threshold=neuron_params[neuron_model]["inhibitory"]["v_threshold_eqs"],
+        #     reset=neuron_params[neuron_model]["inhibitory"]["v_reset_eqs"],
+        #     refractory=neuron_params[neuron_model]["inhibitory"]["refractory"],
+        #     method=neuron_params[neuron_model]["inhibitory"]["method"],
+        # )
 
         ## Set the parameters of the neurons
         ### 共通しているパラメータ
         self.N["l4"].v = neuron_params[neuron_model]["l4"]["v_reset"]
-        self.N["l4"].I = neuron_params[neuron_model]["l4"]["I"]
-        self.N["l4"].tau_I = neuron_params[neuron_model]["l4"]["tau_I"]
         self.N["l4"].I_noise = neuron_params[neuron_model]["l4"]["I_noise"]
 
         self.N["l23"].v = neuron_params[neuron_model]["l23"]["v_reset"]
-        self.N["l23"].I = neuron_params[neuron_model]["l23"]["I"]
-        self.N["l23"].tau_I = neuron_params[neuron_model]["l23"]["tau_I"]
         self.N["l23"].I_noise = neuron_params[neuron_model]["l23"]["I_noise"]
         
-        self.N["inhibitory"].v = neuron_params[neuron_model]["inhibitory"]["v_reset"]
-        self.N["inhibitory"].I = neuron_params[neuron_model]["inhibitory"]["I"]
-        self.N["inhibitory"].tau_I = neuron_params[neuron_model]["inhibitory"]["tau_I"]
-        self.N["inhibitory"].I_noise = neuron_params[neuron_model]["inhibitory"]["I_noise"]
+        # self.N["inhibitory"].v = neuron_params[neuron_model]["inhibitory"]["v_reset"]
+        # self.N["inhibitory"].tau_I = neuron_params[neuron_model]["inhibitory"]["tau_I"]
+        # self.N["inhibitory"].I_noise = neuron_params[neuron_model]["inhibitory"]["I_noise"]
 
         ### モデルごとに異なるパラメータ
         if neuron_model == "LIF":
@@ -309,44 +286,26 @@ class MiniColumn:
             self.N["l4"].tau_m = neuron_params["LIF"]["l4"]["tau_m"]
             self.N["l23"].tau_m = neuron_params["LIF"]["l23"]["tau_m"]
         elif neuron_model == "Izhikevich2003":
-            self.N["l4"].a = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l4"]["neuron_type"]
-            ]["a"]
-            self.N["l4"].b = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l4"]["neuron_type"]
-            ]["b"]
-            self.N["l4"].c = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l4"]["neuron_type"]
-            ]["c"]
-            self.N["l4"].d = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l4"]["neuron_type"]
-            ]["d"]
-
-            self.N["l23"].a = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
-            ]["a"]
-            self.N["l23"].b = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
-            ]["b"]
-            self.N["l23"].c = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
-            ]["c"]
-            self.N["l23"].d = izhikevich_params[
-                neuron_params["Izhikevich2003"]["l23"]["neuron_type"]
-            ]["d"]
-            
-            self.N["inhibitory"].a = izhikevich_params[
-                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
-            ]["a"]
-            self.N["inhibitory"].b = izhikevich_params[
-                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
-            ]["b"]
-            self.N["inhibitory"].c = izhikevich_params[
-                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
-            ]["c"]
-            self.N["inhibitory"].d = izhikevich_params[
-                neuron_params["Izhikevich2003"]["inhibitory"]["neuron_type"]
-            ]["d"]
+            for neuron_group in self.N.keys():
+                if neuron_group == "input":
+                    continue
+                # Neuron type parameters
+                self.N[neuron_group].a = izhikevich_params[
+                    neuron_params["Izhikevich2003"][neuron_group]["neuron_type"]
+                ]["a"]
+                self.N[neuron_group].b = izhikevich_params[
+                    neuron_params["Izhikevich2003"][neuron_group]["neuron_type"]
+                ]["b"]
+                self.N[neuron_group].c = izhikevich_params[
+                    neuron_params["Izhikevich2003"][neuron_group]["neuron_type"]
+                ]["c"]
+                self.N[neuron_group].d = izhikevich_params[
+                    neuron_params["Izhikevich2003"][neuron_group]["neuron_type"]
+                ]["d"]
+                # Others
+                self.N[neuron_group].v_rev = neuron_params["Izhikevich2003"][neuron_group]["v_rev"]
+                self.N[neuron_group].taugsyn = neuron_params["Izhikevich2003"][neuron_group]["tau_gsyn"]
+                
 
         #! SYNAPSE SETTINGS ##############################################################################################
         ## Build Synapses
@@ -372,25 +331,25 @@ class MiniColumn:
         )
         self.S["l4->l23"].connect()
         ### Layer2/3 -> Inhibitory
-        self.S["l23->inhibitory"] = Synapses(
-            self.N["l23"],
-            self.N["inhibitory"],
-            model=syn_eqs,
-            on_pre=syn_eqs_on_pre,
-            delay=1 * ms,
-            method="euler",
-        )
-        self.S["l23->inhibitory"].connect("i == j")
-        ### Layer2/3 <- Inhibitory
-        self.S["inhibitory->l23"] = Synapses(
-            self.N["inhibitory"],
-            self.N["l23"],
-            model=syn_eqs,
-            on_pre=syn_eqs_on_pre,
-            delay=1 * ms,
-            method="euler",
-        )
-        self.S["inhibitory->l23"].connect("i != j")
+        # self.S["l23->inhibitory"] = Synapses(
+        #     self.N["l23"],
+        #     self.N["inhibitory"],
+        #     model=syn_eqs,
+        #     on_pre=syn_eqs_on_pre,
+        #     delay=1 * ms,
+        #     method="euler",
+        # )
+        # self.S["l23->inhibitory"].connect("i == j")
+        # ### Layer2/3 <- Inhibitory
+        # self.S["inhibitory->l23"] = Synapses(
+        #     self.N["inhibitory"],
+        #     self.N["l23"],
+        #     model=syn_eqs,
+        #     on_pre=syn_eqs_on_pre,
+        #     delay=1 * ms,
+        #     method="euler",
+        # )
+        # self.S["inhibitory->l23"].connect("i != j")
 
         # シナプス重みの最大値と最小値の定義
         ## Synapse settings
@@ -412,11 +371,11 @@ class MiniColumn:
             elif synapse_key == "input->l4" or synapse_key == "l23->inhibitory" or synapse_key == "inhibitory->l23":
                 self.S[synapse_key].w = 1.0 # 重みの固定
                 
-            ### ニューロングループ別のシナプスモデルパラメータを代入
-            self.S[synapse_key].v_rev = synapse_model_params[synapse_key]["v_reversal"]
-            self.S[synapse_key].tausyn = synapse_model_params[synapse_key]["tau_syn"]
-            self.S[synapse_key].syn_init = synapse_model_params[synapse_key]["syn_init"]
-            self.S[synapse_key].taugsyn = synapse_model_params[synapse_key]["tau_gsyn"]
+            # ### ニューロングループ別のシナプスモデルパラメータを代入
+            # self.S[synapse_key].v_rev = synapse_model_params[synapse_key]["v_reversal"]
+            # self.S[synapse_key].tausyn = synapse_model_params[synapse_key]["tau_syn"]
+            # self.S[synapse_key].syn_init = synapse_model_params[synapse_key]["syn_init"]
+            # self.S[synapse_key].taugsyn = synapse_model_params[synapse_key]["tau_gsyn"]
 
 
         # Time profileで刺激を与える場合
@@ -431,26 +390,17 @@ class MiniColumn:
             else:
                 self.spikemon[neuron_key] = SpikeMonitor(self.N[neuron_key])
                 self.statemon[neuron_key] = StateMonitor(
-                    self.N[neuron_key], ["v", "I"], record=True, when="after_thresholds"
+                    self.N[neuron_key], ["v", "I"], record=True
                 )
-        # self.spikemon["l4"] = SpikeMonitor(self.N["l4"])
-        # self.spikemon["l23"] = SpikeMonitor(self.N["l23"])
-        # self.spikemon["input"] = SpikeMonitor(self.N["input"])
-        # self.statemon["l4"] = StateMonitor(
-        #     self.N["l4"], ["v", "I"], record=True, when="after_thresholds"
-        # )
-        # self.statemon["l23"] = StateMonitor(
-        #     self.N["l23"], ["v", "I"], record=True, when="after_thresholds"
-        # )
+
         self.statemon["S_l4->l23"] = StateMonitor(
             self.S["l4->l23"],
             ["w", "apre", "apost", "gsyn"],
             record=True,
-            when="after_thresholds",
         )
+        
 
         self.network = Network(self.N, self.S, self.spikemon, self.statemon)
-        
         
         # Save Parameters for plotting
         self.v_rest_for_plot_l4 = neuron_params[neuron_model]["l4"]["v_reset"]
@@ -551,7 +501,7 @@ class MiniColumn:
         for i, j in enumerate(neurons):
             ax[i].plot(self.statemon["l4"].t / ms, self.statemon["l4"].I[j], color="k")
             ax[i].set_ylabel(f"Neuron No.{j}")
-            ax[i].set_ylim(0, 120)
+            # ax[i].set_ylim(0, 120)
             ax[i].set_xlabel("Time (ms)")
         fig.suptitle(title)
 
@@ -567,7 +517,7 @@ class MiniColumn:
                 self.statemon["l23"].t / ms, self.statemon["l23"].I[j], color="k"
             )
             ax[i].set_ylabel(f"Neuron No.{j}")
-            ax[i].set_ylim(0, 120)
+            # ax[i].set_ylim(0, 120)
             ax[i].set_xlabel("Time (ms)")
         fig.suptitle(title)
 
