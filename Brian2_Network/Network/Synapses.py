@@ -16,7 +16,7 @@ class STDP:
         """
 
         self.on_pre = """
-            gsyn_post += w
+            ge_post += w
             apre = Apre
             w = clip(w + apost, 0, wmax)
         """
@@ -37,15 +37,17 @@ class STDP:
         }
 
     def __call__(
-        self, pre_neurons, post_neurons, tag_name: str, connect=True
+        self, pre_neurons, post_neurons, name:str, connect=True
     ):
+
+        
         synapse = Synapses(
             source=pre_neurons,
             target=post_neurons,
             model=self.model,
             on_pre=self.on_pre,
             on_post=self.on_post,
-            name=tag_name,
+            name=name,
             namespace=self.params,
             method="euler"
         )
@@ -63,25 +65,28 @@ class NonSTDP:
 
         self.model = "w : 1"
 
-        self.on_pre = "gsyn_post += w"
+        self.on_pre_e = "ge_post += w" # 後ニューロンへの興奮性入力
+        self.on_pre_i = "gi_post += w" # 後ニューロンへの抑制性入力
 
-        self.params = {
-            "w": 1.0,
-        }
-
-    def __call__(self, pre_neurons, post_neurons, tag_name: str, connect=True):
+    def __call__(self, pre_neurons, post_neurons, name:str, exc_or_inh:str, w:float=None, connect=True):
+        if exc_or_inh == "exc":
+            on_pre = self.on_pre_e
+        elif exc_or_inh == "inh":
+            on_pre = self.on_pre_i
+        else:
+            raise ValueError("exc_or_inh must be 'exc' or 'inh'")
+        
         synapse = Synapses(
             source=pre_neurons,
             target=post_neurons,
             model=self.model,
-            on_pre=self.on_pre,
+            on_pre=on_pre,
             method="euler",
-            name=tag_name,
-            namespace=self.params,
+            name=name,
         )
         synapse.connect(connect)
-        if self.w is not None:
-            synapse.w = self.w
-        else:
+        if w is None:
             synapse.w = 1
+        else:
+            synapse.w = w
         return synapse

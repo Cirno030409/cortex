@@ -8,6 +8,7 @@ class Plotter:
     プロットを行うクラス．
     """
     def __init__(self, network, column_id:int):
+        self.network = network.obj
         self.v_th_for_plot_l4 = network["N_l4"].namespace["v_th"]
         self.v_rest_for_plot_l4 = network["N_l4"].namespace["v_reset"]
         
@@ -121,10 +122,12 @@ class Plotter:
         subtitle = f" (column_id: {self.column_id}) [L4]"
         fig.canvas.manager.set_window_title(title + subtitle)
         for i, j in enumerate(neurons):
-            ax[i].plot(self.statemon["l4"].t / ms, self.statemon["l4"].I[j], color="k")
+            ax[i].plot(self.network["statemon_N_l4"].t / ms, self.network["statemon_N_l4"].Ie[j], color="r", label="Excitatory")
+            ax[i].plot(self.network["statemon_N_l4"].t / ms, self.network["statemon_N_l4"].Ii[j], color="b", label="Inhibitory")
             ax[i].set_ylabel(f"Neuron No.{j}")
-            # ax[i].set_ylim(0, 120)
+            ax[i].set_ylim(0, 120)
             ax[i].set_xlabel("Time (ms)")
+            ax[i].legend()
         fig.suptitle(title)
 
         if neuron_num_l23 is None:
@@ -135,36 +138,84 @@ class Plotter:
         subtitle = f" (column_id: {self.column_id}) [L2/3]"
         fig.canvas.manager.set_window_title(title + subtitle)
         for i, j in enumerate(neurons):
-            ax[i].plot(
-                self.statemon["l23"].t / ms, self.statemon["l23"].I[j], color="k"
+            ax1 = ax[i]
+            ax2 = ax1.twinx()
+            ax1.plot(
+                self.network["statemon_N_l23"].t / ms, self.network["statemon_N_l23"].Ie[j], color="r", label="Excitatory"
             )
-            ax[i].set_ylabel(f"Neuron No.{j}")
-            # ax[i].set_ylim(0, 120)
-            ax[i].set_xlabel("Time (ms)")
+            ax2.plot(
+                self.network["statemon_N_l23"].t / ms, self.network["statemon_N_l23"].Ii[j], color="b", label="Inhibitory"
+            )
+            ax1.set_ylabel(f"Neuron No.{j}")
+            ax1.set_ylim(-10, 120)
+            ax2.set_ylim(10, -120)
+            ax1.set_xlabel("Time (ms)")
+            ax1.legend(loc="upper left")
+            ax2.legend(loc="upper right")
         fig.suptitle(title)
+        
+        try:
+            N_inh = self.network["N_inh"]
+        except KeyError:
+            N_inh = None
+        if N_inh is not None:
+            fig, ax = plt.subplots(len(neurons) + 1, 1, sharex=True, figsize=(12, 9))
+            subtitle = f" (column_id: {self.column_id}) [Inhibitory]"
+            fig.canvas.manager.set_window_title(title + subtitle)
+            for i, j in enumerate(neurons):
+                ax1 = ax[i]
+                ax2 = ax1.twinx()
+                ax1.plot(
+                    self.network["statemon_N_inh"].t / ms, self.network["statemon_N_inh"].Ie[j], color="r", label="Excitatory"
+                )
+                ax2.plot(
+                    self.network["statemon_N_inh"].t / ms, self.network["statemon_N_inh"].Ii[j], color="b", label="Inhibitory"
+                )
+                ax1.set_ylabel(f"Neuron No.{j}")
+                ax1.set_ylim(-10, 120)
+                ax2.set_ylim(10, -120)
+                ax1.set_xlabel("Time (ms)")
+                ax1.legend(loc="upper left")
+                ax2.legend(loc="upper right")
+            fig.suptitle(title + subtitle)
+            
+    def draw_threshold_changes(self):
+        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(12, 9))
+        title = "Threshold[L4]"
+        subtitle = f" (column_id: {self.column_id}) [Threshold]"
+        fig.canvas.manager.set_window_title(title + subtitle)
+        for i in range(1):
+            ax[i].plot(self.network["statemon_N_l4"].t / ms, self.network["statemon_N_l4"].theta[15], color="k")
+            ax[i].set_ylabel(f"Neuron No.{i}")
+            ax[i].set_xlabel("Time (ms)")
+        fig.suptitle(title + subtitle)
 
     def draw_conductance(
-        self, synapse_num: list[int] = None, title: str = "Conductance"
+        self, title: str = "Conductance"
     ):
         """
         シナプスモデルのコンダクタンスのグラフを描画する．
         """
-        if synapse_num is None:
-            neurons = range(self.n_l4 * self.n_l23)
-        else:
-            neurons = synapse_num
-        fig, ax = plt.subplots(len(neurons) + 1, 1, sharex=True, figsize=(12, 9))
+        fig, ax = plt.subplots(self.network.n_l23 + 1, 1, sharex=True, figsize=(12, 9))
         subtitle = f" (column_id: {self.column_id}) [L4->L2/3]"
         fig.canvas.manager.set_window_title(title + subtitle)
-        for i, j in enumerate(neurons):
+        for i in range(self.network.n_l23):
             ax[i].plot(
-                self.statemon["S_l4->l23"].t / ms,
-                self.statemon["S_l4->l23"].gsyn[j],
-                color="k",
+                self.network["statemon_N_l23"].t / ms,
+                self.network["statemon_N_l23"].ge[i],
+                color="r",
+                label="Excitatory"
             )
-            ax[i].set_ylabel(f"Synapse No.{j}")
+            ax[i].plot(
+                self.network["statemon_N_l23"].t / ms,
+                self.network["statemon_N_l23"].gi[i],
+                color="b",
+                label="Inhibitory"
+            )
+            ax[i].set_ylabel(f"Synapse No.{i}")
             ax[i].set_xlabel("Time (ms)")
             # ax[i].set_ylim(-0.5, 1.5)
+            ax[i].legend()
         fig.suptitle(title + subtitle)
 
     def draw_spike_trace(
@@ -306,19 +357,31 @@ class Plotter:
         fig.canvas.manager.set_window_title("Initial weight of L2/3 neurons")
         plt.colorbar(cax, ax=fig.axes, orientation="vertical", fraction=0.025, pad=0.04)
 
-    def draw_raster_plot(self, simulation_duration:int , title="Raster plot"):
+    def draw_raster_plot(self, title="Raster plot"):
         """
         ラスタープロットをプロットする．この関数呼び出し後にplt.show()の記述が必要．
 
         Args:
             title (str, optional): グラフタイトル. Defaults to None.
         """
-        fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
-        subtitle = f" (column_id: {self.column_id}) Upper[L2/3], Lower[L4]"
+        try:
+            N_inh = self.network["N_inh"]
+        except KeyError:
+            N_inh = None
+            
+        if N_inh is not None:
+            fig, ax = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+        else:
+            fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+        if N_inh is not None:
+            subtitle = f" (column_id: {self.column_id}) Upper[L2/3], Middle[L4], Lower[Inhibitory]"
+        else:
+            subtitle = f" (column_id: {self.column_id}) Upper[L2/3], Lower[L4]"
         fig.canvas.manager.set_window_title(title + subtitle)
+        # L2/3のラスタープロット
         ax[0].scatter(
-            self.spikemon["l23"].t / ms,
-            self.spikemon["l23"].i,
+            self.network["spikemon_N_l23"].t / ms,
+            self.network["spikemon_N_l23"].i,
             s=2,
             color="k",
             label="L2/3",
@@ -326,7 +389,7 @@ class Plotter:
         ax[0].set_ylabel("Neuron No")
         ax[0].set_xlabel("Time (ms)")
         ax[0].set_ylim(-0.5, self.n_l23 + 0.5)
-        ax[0].set_xlim(0, simulation_duration / ms)
+        ax[0].set_xlim(0, self.network.net.t / ms)
         ax[0].set_yticks(range(self.n_l23))
 
         ax[1].scatter(
@@ -336,12 +399,27 @@ class Plotter:
             color="k",
             label="L4",
         )
+        # L4のラスタープロット
         ax[1].set_ylabel("Neuron No")
         ax[1].set_xlabel("Time (ms)")
         ax[1].set_ylim(-0.5, self.n_l4 + 0.5)
-        ax[1].set_xlim(0, simulation_duration / ms)
+        ax[1].set_xlim(0, self.network.net.t / ms)
         ax[1].set_yticks(range(self.n_l4))
         fig.suptitle(title + subtitle)
+        
+        # Inhibitoryのラスタープロット
+        if N_inh is not None:
+            ax[2].scatter(
+                self.network["spikemon_N_inh"].t / ms,
+                self.network["spikemon_N_inh"].i,
+                s=2,
+                color="k",
+                label="N_inh",
+            )
+            ax[2].set_xlabel("Time (ms)")
+            ax[2].set_ylabel("Neuron No")
+            ax[2].set_xlim(0, self.network.net.t / ms)
+            ax[2].set_yticks(range(self.network.n_inh))
         
         # inputニューロンのラスタープロット
         fig= plt.figure()
@@ -353,13 +431,14 @@ class Plotter:
             color="k",
             label="Input",
         )
-        ax.set_ylim(-0.5, self.n_inp + 0.5)
-        ax.set_xlim(0, simulation_duration / ms)
-        ax.set_yticks(range(self.n_inp))
+        ax.set_xlim(0, self.network.net.t / ms)
+        ax.set_yticks(range(self.network.n_inp))
         ax.set_xlabel("Time (ms)")
         ax.set_ylabel("Neuron No")
-        fig.suptitle("Raster plot of input neurons")
-        fig.canvas.manager.set_window_title("Raster plot of input neurons")
+        fig.suptitle("Input Neuron")
+        fig.canvas.manager.set_window_title("Input Neuron")
+        
+
 
     def get_firing_rate(self, simulate_duration):
         return {
@@ -406,3 +485,22 @@ class Plotter:
             for i in range(self.n_l4)
         ]
         print("L4 Fire Rates:", fire_rates_l4)
+
+    def draw_firing_rate_changes(self):
+        """
+        各ニューロンの発火率の変化をプロットする．
+        """
+        fig, ax = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+        title = "Firing rate changes"
+        subtitle = f" (column_id: {self.column_id}) Upper[L2/3], Lower[L4]"
+        fig.canvas.manager.set_window_title(title + subtitle)
+        # L2/3のニューロンごとの発火率の推移をプロット
+        ax[0].plot(self.network["popmon_N_l23"].t / ms, self.network["popmon_N_l23"].smooth_rate(width=50*ms))
+        ax[0].set_title("L2/3 Neurons Firing Rate")
+        ax[0].set_ylabel("Firing Rate (Hz)")
+
+        # L4のニューロンごとの発火率の推移をプロット
+        ax[1].plot(self.network["popmon_N_l4"].t / ms, self.network["popmon_N_l4"].smooth_rate(width=50*ms))
+        ax[1].set_title("L4 Neurons Firing Rate")
+        ax[1].set_ylabel("Firing Rate (Hz)")
+        
