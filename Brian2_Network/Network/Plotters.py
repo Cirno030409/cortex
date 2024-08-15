@@ -1,8 +1,97 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from brian2.units import *
+from brian2 import *
 
 
+class Common_Plotter:
+    """
+    シミュレーション後のネットワークの記録したデータのプロットを行う。
+    """        
+    def raster_plot(self, spikemon, all_rows, this_row, simu_time, fig_title=""):
+        """
+        与えられたスパイクモニターからラスタプロットを描画します。
+
+        Args:
+            spikemon (SpikeMonitor): スパイクモニター
+            all_rows (int): 縦に並べるラスタープロットの数
+            this_row (int): このプロットを設置する行
+            simu_time (float): シミュレーションの時間
+            fig_title (str): フィグのタイトル
+        """
+        plt.subplot(all_rows, 1, this_row)
+        plt.plot(spikemon.t/ms, spikemon.i, '.k', markersize=2)
+        plt.xlabel('Time (ms)')
+        plt.xlim(0, simu_time*1000)
+        plt.ylim(0, len(spikemon.source))
+        plt.ylabel('Neuron index')
+        plt.title(fig_title)
+        
+    def state_plot(self, statemon, neuron_num, variable_name, all_rows, this_row, simu_time, fig_title=""):
+        """
+        与えられたステートモニターからプロットを描画します。
+        
+        Args:
+            statemon (StateMonitor): ステートモニター
+            neuron_num (int): プロットするニューロンの番号
+            variable_name (str): プロットする変数の名前
+            all_rows (int): 縦に並べるラスタープロットの数
+            this_row (int): このプロットを設置する行
+            simu_time (float): シミュレーションの時間
+            fig_title (str): フィグのタイトル
+        """
+        plt.subplot(all_rows, 1, this_row)
+        plt.plot(statemon.t/ms, getattr(statemon, variable_name)[neuron_num], color="k")
+        plt.xlabel('Time (ms)')
+        plt.ylabel(variable_name)
+        plt.xlim(0, simu_time*1000)
+        plt.title(fig_title)
+                
+    def weight_plot(self, synapse, n_pre, n_post, title=""):
+        """
+        与えられたステートモニターから重みのプロットを描画します。
+
+        Args:
+            synapse (SynapseGroup): シナプスグループ
+            n_pre (int): 前のニューロンの数
+            n_post (int): 後のニューロンの数
+        """
+        # synapse.w[neuron_idx][time_idx]
+        weight_mat = np.zeros((n_pre, n_post))
+        for i, j, w in zip(synapse.i, synapse.j, synapse.w):
+            weight_mat[i, j] = w
+        print(np.shape(weight_mat))
+            
+        # サブプロットの行数と列数を計算
+        n_rows = int(np.ceil(np.sqrt(n_post)))
+        n_cols = int(np.ceil(n_post / n_rows))
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 9))  # 幅を10に増やして右側に空白を作る
+        axes = axes.flatten()  # 2次元配列を1次元に変換
+
+        for img in range(n_post):
+            weightloop = weight_mat[:, img].reshape(
+                int(np.sqrt(n_pre)), int(np.sqrt(n_pre))
+            )
+            cax = axes[img].matshow(weightloop, cmap="viridis")
+            axes[img].set_xticks([])
+            axes[img].set_yticks([])
+
+        # 余分なサブプロットを非表示にする
+        for img in range(n_post, n_rows * n_cols):
+            axes[img].axis('off')
+
+        fig.suptitle(title)
+        fig.canvas.manager.set_window_title(title)
+
+        # 右側にカラーバーを配置
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # 右側に空白を作り、そこにカラーバーを配置
+        plt.colorbar(cax, cax=cbar_ax)
+
+        plt.tight_layout(rect=[0, 0, 0.9, 1])  # 右側に10%の空白を確保
+    
+        
+        
+        
 class Plotter:
     """
     プロットを行うクラス．

@@ -7,7 +7,7 @@ class STDP:
     STDPシナプスを作成します。
     """
 
-    def __init__(self):
+    def __init__(self, params=None):
 
         self.model = """
             dapre/dt = (-apre - alpha)/taupre : 1 (clock-driven)
@@ -16,25 +16,30 @@ class STDP:
         """
 
         self.on_pre = """
-            ge_post += w
             apre = Apre
-            w = clip(w + apost, 0, wmax)
+            w = clip(w + apost * nu_pre, 0, wmax)
+            ge_post += w
         """
 
         self.on_post = """
             apost = Apost
-            w = clip(w + apre, 0, wmax)
+            w = clip(w + apre * nu_post, 0, wmax)
         """
-
-        self.params = {
-            "wmax": 1,  # 最大重み
-            "wmin": 0,  # 最小重み
-            "Apre": 0.01,  # 前ニューロンのスパイクトレースのリセット値
-            "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
-            "taupre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-            "taupost": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
-            "alpha": 0.01,  # スパイクトレースの収束地点
-        }
+        if params is None:
+            # パラメータ未指定時のデフォルトのパラメータ
+            self.params = {
+                "wmax": 1,  # 最大重み
+                "wmin": 0,  # 最小重み
+                "Apre": 0.01,  # 前ニューロンのスパイクトレースのリセット値
+                "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
+                "taupre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
+                "taupost": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
+                "nu_pre": 1,  # 前ニューロン発火時のスパイクトレースの関与率
+                "nu_post": 1,  # 後ニューロン発火時のスパイクトレースの関与率
+                "alpha": 0.01,  # スパイクトレースの収束地点
+            }
+        else:
+            self.params = params
 
     def __call__(
         self, pre_neurons, post_neurons, name:str, connect=True
@@ -61,14 +66,22 @@ class NonSTDP:
     非STDPシナプスを作成します。
     """
 
-    def __init__(self):
+    def __init__(self, params=None):
 
         self.model = "w : 1"
 
         self.on_pre_e = "ge_post += w" # 後ニューロンへの興奮性入力
         self.on_pre_i = "gi_post += w" # 後ニューロンへの抑制性入力
 
-    def __call__(self, pre_neurons, post_neurons, name:str, exc_or_inh:str, w:float=None, connect=True):
+        if params is None:
+            # パラメータ未指定時のデフォルトのパラメータ
+            self.params = {
+                "w": 1,  # 固定重み
+            }
+        else:
+            self.params = params
+
+    def __call__(self, pre_neurons, post_neurons, exc_or_inh:str, name:str, delay=1*ms, connect=True):
         if exc_or_inh == "exc":
             on_pre = self.on_pre_e
         elif exc_or_inh == "inh":
@@ -83,10 +96,8 @@ class NonSTDP:
             on_pre=on_pre,
             method="euler",
             name=name,
+            delay=delay
         )
         synapse.connect(connect)
-        if w is None:
-            synapse.w = 1
-        else:
-            synapse.w = w
+        synapse.w = self.params["w"]
         return synapse

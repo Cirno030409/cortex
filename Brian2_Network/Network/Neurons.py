@@ -1,8 +1,10 @@
 import json
 from typing import Any
 
-from brian2 import NeuronGroup
+import numpy as np
+from brian2 import NeuronGroup, PoissonGroup
 from brian2.units import *
+import pprint as p
 
 
 class Conductance_Izhikevich2003:
@@ -20,7 +22,7 @@ class Conductance_Izhikevich2003:
         """
         
         self.params = {
-            "I_noise"       : 20,
+            "I_noise"       : 0,
             "tauge"         : 2*ms,
             "taugi"         : 30*ms,
             "tautheta"      : 1e7*ms,
@@ -59,46 +61,93 @@ class Conductance_Izhikevich2003:
     
 class Conductance_LIF:
     
-    def __init__(self):
-        
+    def __init__(self, params=None):
+        if params is None:
+            # パラメータ未指定時のデフォルトのパラメータ
+            self.params = {
+                "I_noise"       : 0,        # 定常入力電流
+                "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
+                "taugi"         : 2*ms,     # 抑制性ニューロンのコンダクタンスの時定数
+                "taum"          : 10*ms,    # 膜電位の時定数
+                "tautheta"      : 1e7*ms,   # ホメオスタシスの発火閾値の上昇値の減衰時定数
+                "v_rev_e"       : 0,        # 興奮性ニューロンの平衡膜電位
+                "v_rev_i"       : -100,     # 抑制性ニューロンの平衡膜電位
+                "theta_dt"      : 0,        # ホメオスタシスの発火閾値の上昇値
+                "refractory"    : 2 * ms,   # 不応期
+                "v_reset"       : -60,      # リセット電位
+                "v_rest"        : -50,      # 静止膜電位
+                "v_th"          : -40       # 発火閾値
+            }
+        else:
+            self.params = params
         self.model = """
-            dv/dt = ((v_reset - v) + (Ie + Ii + I_noise)) / taum : 1 (unless refractory)
+            dv/dt = ((v_rest - v) + (Ie + Ii + I_noise)) / taum : 1 (unless refractory)
             dge/dt = (-ge)/tauge : 1
             dgi/dt = (-gi)/taugi : 1
             dtheta/dt = -theta/tautheta : 1
             Ie = ge * (v_rev_e - v) : 1
             Ii = gi * (v_rev_i - v) : 1
-        """
-        
-        self.params = {
-            "I_noise"       : 20,
-            "tauge"         : 2*ms,
-            "taugi"         : 30*ms,
-            "taum"          : 10*ms,
-            "tautheta"      : 1e7*ms,
-            "v_rev_e"       : 0,
-            "v_rev_i"       : -100,
-            "theta_dt"      : 0,
-        }      
+            I_noise : 1
+        """      
 
         
-    def __call__(self, N, exc_or_inh:str, name:str, *args, **kwargs) -> Any:
-        if exc_or_inh == "exc":
-            self.params.update({
-                "refractory" : 0 * ms,
-                "v_reset" : -65,
-                "v_th" : -50
-            })
-        elif exc_or_inh == "inh":
-            self.params.update({
-                "refractory" : 2 * ms,
-                "v_reset" : -45,
-                "v_th" : -40
-            })
-        else :
-            raise Exception("Neuron type must be 'exc' or 'inh'")
+    def __call__(self, N, name:str, exc_or_inh:str=None, *args, **kwargs) -> Any:
+        # if exc_or_inh == "exc":
+        #     self.params.update({
+        #         "refractory" : 2 * ms,
+        #         "v_reset" : -60,
+        #         "v_th" : -40
+        #     })
+        # elif exc_or_inh == "inh":
+        #     self.params.update({
+        #         "refractory" : 2 * ms,
+        #         "v_reset" : -60,
+        #         "v_th" : -40
+        #     })
+        # else :
+        #     raise Exception("Neuron type must be 'exc' or 'inh'")
         neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=v_reset; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, name=name, *args, **kwargs)
         neuron.v = self.params["v_reset"]
         neuron.ge = 0
         neuron.gi = 0
         return neuron
+        
+    def change_params(self, neuron, params):
+        """
+        ニューロンのパラメータを変更する。
+
+        Args:
+            neuron (brian2.NeuronGroup): ニューロンのインスタンス
+            params (dict): ニューロンのパラメータ
+            ex:
+                neuron.set_states({"v_reset": -50})
+        """
+        neuron.set_states(params)
+        print("Neuron parameters were changed:")
+        for key, value in params.items():
+            print(f"{key}: {value}")
+        
+    def input_voltage(self, neuron, voltage):
+        neuron.v_rev_e = voltage
+        
+class Poisson_Input:
+        
+    def __call__(self, N, max_rate:float):
+        self.max_rate = max_rate
+        self.rates = np.zeros(N)
+
+        self.neuron = PoissonGroup(N, self.rates * Hz, name="Poisson_Input")
+        return self.neuron
+    
+    def change_image(self, image:np.array):
+        self.rates = self.get_rate_from_image(image)
+        self.neuron.rates = self.rates
+        
+    def get_rate_from_image(self, image:np.array):
+        
+        for i in range(len(image)):
+            image[i] = image[i] / image[i].max()
+            # image[i] = image[i] / 255.0
+            image[i] = image[i] * self.max_rate
+        return image.flatten() * Hz
+        
