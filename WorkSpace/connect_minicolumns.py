@@ -1,7 +1,7 @@
 import numpy as np
 from brian2.units import *
-from Network.Networks import MiniColumn
-from Network.Networks import Cortex
+from Brian2_Framework.Networks import MiniColumn
+from Brian2_Framework.Networks import Cortex
 
 
 cortex = Cortex()

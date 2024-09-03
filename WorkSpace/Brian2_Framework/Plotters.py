@@ -1,13 +1,38 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from brian2 import *
-
+import os
+import glob
 
 class Common_Plotter:
     """
     シミュレーション後のネットワークの記録したデータのプロットを行う。
     """        
-    def raster_plot(self, spikemon, all_rows, this_row, simu_time, fig_title=""):
+    
+    def __init__(self):
+        """
+        様々なグラフを描画するプロッターを作成します。
+        シミュレーション時間は Brian2.Network.t を渡す必要があります。
+        
+        Methods:
+            raster_plot(spikemon, all_rows, this_row, fig_title=""): 
+                スパイクモニターからラスタプロットを描画します。
+            
+            state_plot(statemon, neuron_num, variable_name, all_rows, this_row, fig_title=""): 
+                ステートモニターからプロットを描画します。
+            
+            weight_plot(synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0): 
+                シナプスグループから重みのプロットを描画します。
+
+        """
+        
+    def set_simu_time(self, simu_time):
+        """
+        シミュレーションの時間を設定します。
+        """
+        self.simu_time = simu_time
+        
+    def raster_plot(self, spikemon, all_rows, this_row, fig_title=""):
         """
         与えられたスパイクモニターからラスタプロットを描画します。
 
@@ -15,18 +40,17 @@ class Common_Plotter:
             spikemon (SpikeMonitor): スパイクモニター
             all_rows (int): 縦に並べるラスタープロットの数
             this_row (int): このプロットを設置する行
-            simu_time (float): シミュレーションの時間
             fig_title (str): フィグのタイトル
         """
         plt.subplot(all_rows, 1, this_row)
-        plt.plot(spikemon.t/ms, spikemon.i, '.k', markersize=2)
+        plt.plot(spikemon.t/ms, spikemon.i, '.k', markersize=1)
         plt.xlabel('Time (ms)')
-        plt.xlim(0, simu_time*1000)
+        plt.xlim(0, self.simu_time*1000)
         plt.ylim(0, len(spikemon.source))
         plt.ylabel('Neuron index')
         plt.title(fig_title)
         
-    def state_plot(self, statemon, neuron_num, variable_name, all_rows, this_row, simu_time, fig_title=""):
+    def state_plot(self, statemon, neuron_num, variable_name, all_rows, this_row, fig_title=""):
         """
         与えられたステートモニターからプロットを描画します。
         
@@ -36,17 +60,17 @@ class Common_Plotter:
             variable_name (str): プロットする変数の名前
             all_rows (int): 縦に並べるラスタープロットの数
             this_row (int): このプロットを設置する行
-            simu_time (float): シミュレーションの時間
             fig_title (str): フィグのタイトル
         """
         plt.subplot(all_rows, 1, this_row)
         plt.plot(statemon.t/ms, getattr(statemon, variable_name)[neuron_num], color="k")
-        plt.xlabel('Time (ms)')
+        if this_row != all_rows:
+            plt.xticks([])
         plt.ylabel(variable_name)
-        plt.xlim(0, simu_time*1000)
+        plt.xlim(0, self.simu_time*1000)
         plt.title(fig_title)
                 
-    def weight_plot(self, synapse, n_pre, n_post, title=""):
+    def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0):
         """
         与えられたステートモニターから重みのプロットを描画します。
 
@@ -54,12 +78,14 @@ class Common_Plotter:
             synapse (SynapseGroup): シナプスグループ
             n_pre (int): 前のニューロンの数
             n_post (int): 後のニューロンの数
+            save_fig (bool): フィグを保存するかどうか
+            save_path (str): フィグを保存するパス
+            n_this_fig (int): このフィグの番号（保存する際のファイル名になる)
         """
         # synapse.w[neuron_idx][time_idx]
         weight_mat = np.zeros((n_pre, n_post))
         for i, j, w in zip(synapse.i, synapse.j, synapse.w):
             weight_mat[i, j] = w
-        print(np.shape(weight_mat))
             
         # サブプロットの行数と列数を計算
         n_rows = int(np.ceil(np.sqrt(n_post)))
@@ -88,7 +114,18 @@ class Common_Plotter:
         plt.colorbar(cax, cax=cbar_ax)
 
         plt.tight_layout(rect=[0, 0, 0.9, 1])  # 右側に10%の空白を確保
-    
+        
+        if save_fig:
+            if n_this_fig == 0:
+                # save_path内の全ファイルを削除
+                files = glob.glob(os.path.join(save_path, '*.png'))
+                for f in files:
+                    os.remove(f)
+                    print(f"\tDeleted {f}")
+                print("[INFO] Weight change save mode is enabled! Deleted all previous images. If turned it on, it may takes little more simulation time.")
+            plt.savefig(save_path + f"{n_this_fig}.png")
+            
+            plt.close()    
         
         
         

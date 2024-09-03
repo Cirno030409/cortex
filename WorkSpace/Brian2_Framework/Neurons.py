@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 from brian2 import NeuronGroup, PoissonGroup
 from brian2.units import *
-import pprint as p
+import pprint as pp
 
 
 class Conductance_Izhikevich2003:
@@ -64,6 +64,7 @@ class Conductance_LIF:
     def __init__(self, params=None):
         if params is None:
             # パラメータ未指定時のデフォルトのパラメータ
+            print("[WARNING] No parameters were specified for STDP synapse. Using default parameters as below.")
             self.params = {
                 "I_noise"       : 0,        # 定常入力電流
                 "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
@@ -78,6 +79,7 @@ class Conductance_LIF:
                 "v_rest"        : -50,      # 静止膜電位
                 "v_th"          : -40       # 発火閾値
             }
+            pp.pprint(self.params)
         else:
             self.params = params
         self.model = """
@@ -139,15 +141,19 @@ class Poisson_Input:
         self.neuron = PoissonGroup(N, self.rates * Hz, name="Poisson_Input")
         return self.neuron
     
-    def change_image(self, image:np.array):
-        self.rates = self.get_rate_from_image(image)
+    def change_image(self, image:np.array, spontaneous_rate:int=0):
+        self.rates = self.get_rate_from_image(image, spontaneous_rate)
         self.neuron.rates = self.rates
         
-    def get_rate_from_image(self, image:np.array):
-        
-        for i in range(len(image)):
-            image[i] = image[i] / image[i].max()
-            # image[i] = image[i] / 255.0
-            image[i] = image[i] * self.max_rate
+    def get_rate_from_image(self, image:list, spontaneous_rate):
+        image = np.array(image).astype(float)
+        if image.max() != 0:
+            image /= image.max()  # 最大値がゼロの場合、正規化を行わない
+            image *= self.max_rate
+        # 0の部分をspontaneous_rateに置き換える
+        image[image == 0] = spontaneous_rate
+        # pp.pprint(image)
+        # input()
+
         return image.flatten() * Hz
         

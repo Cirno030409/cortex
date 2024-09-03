@@ -14,9 +14,9 @@ def load_mnist():
     (img_train, label_train), (img_test, label_test) = mnist.load_data()
     
     
-    print("[MNISTデータセットの読み込みが完了しました。]")
-    print(f"訓練データ: {img_train.shape[0]}枚")
-    print(f"テストデータ: {img_test.shape[0]}枚")
+    print("[PROCESS] MNIST dataset loaded.")
+    print(f"\tTraining data: {img_train.shape[0]} pieces")
+    print(f"\tTest data: {img_test.shape[0]} pieces")
     
     return (img_train, label_train), (img_test, label_test)
 
@@ -44,6 +44,38 @@ def get_mnist_sample(n_samples=1, dataset='train'):
     
     indices = np.random.choice(len(img), n_samples, replace=False)
     return img[indices], label[indices]
+
+def get_mnist_sample_equality_labels(n_samples=1, dataset='train'):
+    """
+    各ラベルから均等枚数のランダム画像を取得します。
+    
+    Args:
+        n_samples (int): 取得するサンプル数(１０の倍数枚である必要がある)
+        dataset (str): 'train'または'test'を指定
+
+    Returns:
+        tuple: (images, labels)
+        images: 画像データ(list)
+        labels: ラベルデータ(list)
+    """
+    if n_samples % 10 != 0:
+        raise ValueError("n_samplesは10の倍数である必要があります。")
+    
+    imgs = []
+    labels = []
+    n_img_per_label = n_samples // 10
+    
+    for _ in range(10):
+        img, label = get_mnist_sample(n_img_per_label, dataset)
+        imgs.extend(img)
+        labels.extend(label)
+        
+    # imgsとlabelsを対応を保ちながらシャッフルする
+    combined = list(zip(imgs, labels))
+    np.random.shuffle(combined)
+    imgs, labels = zip(*combined)
+        
+    return imgs, labels
 
 def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
     (img_train, label_train), (img_test, label_test) = load_mnist()

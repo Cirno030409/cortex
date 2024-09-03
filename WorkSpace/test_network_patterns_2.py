@@ -1,10 +1,11 @@
 """
-実験：二つニューロンによる相互への結合によるメモリー効果
+実験：一つのニューロンへの再帰的な入力でのメモリー効果
 """
+
 from brian2 import *
-from Network.Neurons import *
-from Network.Synapses import *
-import Network.Plotters as Plotters
+from Brian2_Framework.Neurons import *
+from Brian2_Framework.Synapses import *
+import Brian2_Framework.Plotters as Plotters
 import matplotlib.pyplot as plt
 
 params = {
@@ -28,33 +29,24 @@ S = {}
 spikemon = {}
 statemon = {}
 
-# Pattern C (Memory)
 N["1"] = neuron(1, 'exc', "N_1")
-N["2"] = neuron(1, 'exc', "N_2")
-S["1"] = synapse(N["1"], N["2"], "exc", "S_1")
-S["2"] = synapse(N["2"], N["1"], "exc", "S_2")
+S["1"] = synapse(N["1"], N["1"], "exc", "S_1")
 
 spikemon["1"] = SpikeMonitor(N["1"])
-spikemon["2"] = SpikeMonitor(N["2"])
 statemon["1"] = StateMonitor(N["1"], ["v", "I_noise"], record=True)
-statemon["2"] = StateMonitor(N["2"], ["v", "I_noise"], record=True)
 
 network = Network(N, S, spikemon, statemon)
 
 neuron.change_params(N["1"], {"I_noise": 50})
-neuron.change_params(N["2"], {"I_noise": 0})
 network.run(100*ms)
 neuron.change_params(N["1"], {"I_noise": 0})
-neuron.change_params(N["2"], {"I_noise": 0})
 network.run(100*ms)
 
 plt.figure()
 plotter.raster_plot(spikemon["1"], 2, 1, network.t, "Neuron 1")
-plotter.raster_plot(spikemon["2"], 2, 2, network.t, "Neuron 2")
 
 plt.figure()
 plotter.state_plot(statemon["1"], 0, "I_noise", 2, 1, network.t)
-plotter.state_plot(statemon["2"], 0, "I_noise", 2, 2, network.t)
 
 plt.show()
 

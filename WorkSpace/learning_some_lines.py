@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from brian2.units import *
 from keras.datasets import mnist
-from Network.Networks import MiniColumn
-from Network.Plotters import Plotter
+from Brian2_Framework.Networks import MiniColumn
+from Brian2_Framework.Plotters import Plotter
 from tqdm import tqdm
 
 if __name__ == "__main__":

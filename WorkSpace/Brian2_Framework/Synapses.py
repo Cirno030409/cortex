@@ -1,5 +1,6 @@
 from brian2 import Synapses
 from brian2.units import *
+import pprint as pp
 
 
 class STDP:
@@ -10,34 +11,38 @@ class STDP:
     def __init__(self, params=None):
 
         self.model = """
-            dapre/dt = (-apre - alpha)/taupre : 1 (clock-driven)
-            dapost/dt = (-apost)/taupost : 1 (clock-driven)
+            dapre/dt = (-apre - alpha)/taupre : 1 (event-driven)
+            dapost/dt = (-apost)/taupost : 1 (event-driven)
             w : 1
+            sw : 1
         """
 
         self.on_pre = """
             apre = Apre
-            w = clip(w + apost * nu_pre, 0, wmax)
+            w = clip(w - apost * nu_post * sw, 0, wmax)
             ge_post += w
         """
 
         self.on_post = """
             apost = Apost
-            w = clip(w + apre * nu_post, 0, wmax)
+            w = clip(w + apre * nu_pre * sw, 0, wmax)
         """
         if params is None:
             # パラメータ未指定時のデフォルトのパラメータ
+            print("[WARNING] No parameters were specified for STDP synapse. Using default parameters as below.")
             self.params = {
                 "wmax": 1,  # 最大重み
                 "wmin": 0,  # 最小重み
-                "Apre": 0.01,  # 前ニューロンのスパイクトレースのリセット値
+                "Apre": 1,  # 前ニューロンのスパイクトレースのリセット値
                 "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
                 "taupre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
                 "taupost": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
                 "nu_pre": 1,  # 前ニューロン発火時のスパイクトレースの関与率
                 "nu_post": 1,  # 後ニューロン発火時のスパイクトレースの関与率
                 "alpha": 0.01,  # スパイクトレースの収束地点
+                "sw": 1,  # 学習の有無の切り替え
             }
+            pp.pprint(self.params)
         else:
             self.params = params
 

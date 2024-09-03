@@ -2,11 +2,11 @@
 実験：複数入力から同一出力を連想するネットワークの検証
 """
 from brian2 import *
-from Network.Neurons import *
-from Network.Synapses import *
-import Network.Plotters as Plotters
+from Brian2_Framework.Neurons import *
+from Brian2_Framework.Synapses import *
+import Brian2_Framework.Plotters as Plotters
 import matplotlib.pyplot as plt
-import Network.Mnist as Mnist
+import Brian2_Framework.Mnist as Mnist
 
 params = {
     "I_noise"       : 0,

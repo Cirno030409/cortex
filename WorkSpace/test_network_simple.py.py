@@ -2,9 +2,9 @@
 実験：二つニューロンによる相互への結合によるメモリー効果
 """
 from brian2 import *
-from Network.Neurons import *
-from Network.Synapses import *
-import Network.Plotters as Plotters
+from Brian2_Framework.Neurons import *
+from Brian2_Framework.Synapses import *
+import Brian2_Framework.Plotters as Plotters
 import matplotlib.pyplot as plt
 
 params = {
