@@ -25,10 +25,14 @@ class Common_Plotter:
                 シナプスグループから重みのプロットを描画します。
 
         """
+        self.simu_time = None
         
     def set_simu_time(self, simu_time):
         """
         シミュレーションの時間を設定します。
+        
+        Args:
+            simu_time (float): シミュレーションの時間
         """
         self.simu_time = simu_time
         
@@ -42,6 +46,8 @@ class Common_Plotter:
             this_row (int): このプロットを設置する行
             fig_title (str): フィグのタイトル
         """
+        if self.simu_time is None:
+            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
         plt.subplot(all_rows, 1, this_row)
         plt.plot(spikemon.t/ms, spikemon.i, '.k', markersize=1)
         plt.xlabel('Time (ms)')
@@ -62,6 +68,8 @@ class Common_Plotter:
             this_row (int): このプロットを設置する行
             fig_title (str): フィグのタイトル
         """
+        if self.simu_time is None:
+            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
         plt.subplot(all_rows, 1, this_row)
         plt.plot(statemon.t/ms, getattr(statemon, variable_name)[neuron_num], color="k")
         if this_row != all_rows:
@@ -113,7 +121,10 @@ class Common_Plotter:
         cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # 右側に空白を作り、そこにカラーバーを配置
         plt.colorbar(cax, cax=cbar_ax)
 
+        import warnings
+        warnings.filterwarnings("ignore", category=UserWarning) # カラーバーの警告を無視
         plt.tight_layout(rect=[0, 0, 0.9, 1])  # 右側に10%の空白を確保
+        warnings.filterwarnings("default", category=UserWarning) # カラーバーの警告を有効化
         
         if save_fig:
             if n_this_fig == 0:
@@ -122,7 +133,6 @@ class Common_Plotter:
                 for f in files:
                     os.remove(f)
                     print(f"\tDeleted {f}")
-                print("[INFO] Weight change save mode is enabled! Deleted all previous images. If turned it on, it may takes little more simulation time.")
             plt.savefig(save_path + f"{n_this_fig}.png")
             
             plt.close()    
@@ -351,7 +361,7 @@ class Plotter:
         title: str = "Spike trace",
     ):
         """
-        カラム内のすべてのニューロンのスパイクトレースをプロットする．この関数呼び出し後にplt.show()の記述が必要．
+        カラム内のすべてのニューロンのスパイクトレースをプ���ットする．この関数呼び出し後にplt.show()の記述が必要．
 
         Args:
             neuron_num_l4 (list of int): プロットするニューロンの番号のリスト. 記述しないとすべてのニューロンをプロットする.

@@ -13,11 +13,6 @@ def load_mnist():
     """
     (img_train, label_train), (img_test, label_test) = mnist.load_data()
     
-    
-    print("[PROCESS] MNIST dataset loaded.")
-    print(f"\tTraining data: {img_train.shape[0]} pieces")
-    print(f"\tTest data: {img_test.shape[0]} pieces")
-    
     return (img_train, label_train), (img_test, label_test)
 
 def get_mnist_sample(n_samples=1, dataset='train'):
@@ -116,11 +111,28 @@ def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
         return downsampled_images, selected_labels
     return selected_images, selected_labels
 
-if __name__ == "__main__":
-    images, labels = get_mnist_image(label=3, n_samples=20, down_sample=2, dataset='train')
-    for i in range(20):
+def show_mnist_image(images:list, labels:list) -> None:
+    """
+    提供されたMnist画像を表示します。
+
+    Args:
+        images (list): Mnist画像
+        labels (list): Mnistラベル
+    """
+    plt.figure(figsize=(15, 9))
+    for i in range(len(images)):
         plt.subplot(4, 5, i + 1)
         plt.imshow(images[i], cmap='gray')
         plt.title(labels[i])
         plt.axis('off')
     plt.show()
+
+if __name__ == "__main__":
+    seed = 3
+    np.random.seed(seed)
+    images, labels = get_mnist_sample(n_samples=10000, dataset='train')
+    indices = [0, 2, 3, 4, 5, 6, 7, 8, 9]
+    images = images[indices]
+    labels = labels[indices]
+    show_mnist_image(images, labels)
+    

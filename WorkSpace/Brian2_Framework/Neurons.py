@@ -40,7 +40,7 @@ class Conductance_Izhikevich2003:
         except KeyError:
             raise ValueError(f"Neuron type {neuron_type} not found in Izhikevich2003_parameters.json")
                 
-    def __call__(self, N, exc_or_inh:str, name:str, *args, **kwargs) -> Any:
+    def __call__(self, N, exc_or_inh:str, *args, **kwargs) -> Any:
         if exc_or_inh == "exc":
             self.params.update({
                 "refractory" : 0 * ms,
@@ -53,7 +53,7 @@ class Conductance_Izhikevich2003:
             })
         else :
             raise Exception("Neuron type must be 'exc' or 'inh'")
-        neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=c; u+=d; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, name=name, *args, **kwargs)
+        neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=c; u+=d; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, *args, **kwargs)
         neuron.v = self.params["v_reset"]
         neuron.ge = 0
         neuron.gi = 0
@@ -89,11 +89,10 @@ class Conductance_LIF:
             dtheta/dt = -theta/tautheta : 1
             Ie = ge * (v_rev_e - v) : 1
             Ii = gi * (v_rev_i - v) : 1
-            I_noise : 1
         """      
 
         
-    def __call__(self, N, name:str, exc_or_inh:str=None, *args, **kwargs) -> Any:
+    def __call__(self, N, exc_or_inh:str=None, *args, **kwargs) -> Any:
         # if exc_or_inh == "exc":
         #     self.params.update({
         #         "refractory" : 2 * ms,
@@ -108,7 +107,7 @@ class Conductance_LIF:
         #     })
         # else :
         #     raise Exception("Neuron type must be 'exc' or 'inh'")
-        neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=v_reset; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, name=name, *args, **kwargs)
+        neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=v_reset; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, *args, **kwargs)
         neuron.v = self.params["v_reset"]
         neuron.ge = 0
         neuron.gi = 0
@@ -134,11 +133,11 @@ class Conductance_LIF:
         
 class Poisson_Input:
         
-    def __call__(self, N, max_rate:float):
+    def __call__(self, N, max_rate:float, *args, **kwargs):
         self.max_rate = max_rate
         self.rates = np.zeros(N)
 
-        self.neuron = PoissonGroup(N, self.rates * Hz, name="Poisson_Input")
+        self.neuron = PoissonGroup(N, self.rates * Hz, *args, **kwargs)
         return self.neuron
     
     def change_image(self, image:np.array, spontaneous_rate:int=0):

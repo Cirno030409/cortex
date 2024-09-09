@@ -6,6 +6,36 @@ import json
 import pprint as pp
 import random
 import pickle as pkl
+from tqdm import tqdm
+
+class Neuron_counter():
+    def __init__(self, n_neuron:int, n_labels:int, interval:float):
+        """
+        ニューロンのスパイク数を、ラベル別にカウントします。
+
+        Args:
+            n_neuron (int): ニューロンの数
+            n_labels (int): ラベルの数
+            interval (float): インターバル時間(ms)
+        """
+        self.spike_cnt = np.zeros((n_neuron, n_labels))
+        self.interval = interval
+        self.n_calls = 0 # メソッドcount_spikesが呼び出された回数
+
+    def count_spikes(self, spikemon:SpikeMonitor, label:int):
+        """
+        特定インターバル内のスパイク数をラベル情報とともにカウントアップします。各インターバルで１回ずつ呼ばれるべきです。
+
+        Args:
+            spikemon (SpikeMonitor): スパイクモニター
+            label (int): ラベル
+        """
+        start_time = self.n_calls * self.interval
+        end_time = (self.n_calls + 1) * self.interval
+        neuron_idx = [spike[0] for spike in zip(spikemon.i, spikemon.t) if start_time <= spike[1]/ms < end_time] # インターバル内に発火したニューロンidxのリスト
+        # neuron_idx = [18, 28, 10, ...]
+        for i in neuron_idx: # インターバル内のスパイク数をニューロン別にカウント
+            spike_cnt[i] += 1
 
 def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
     """
@@ -117,44 +147,39 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
 
     Args:
         spikemon (SpikeMonitor): スパイクモニター
+        n_neuron (int): ニューロンの数
+        n_labels (int): ラベルの種類数
         input_labels (list): 学習で使用された画像のラベルのリスト（入力された順番）
         presentation_time (float): 画像提示時間(ms)
         reset_time (float): 画像リセット時間(ms)
-        n_labels (int): ラベルの種類数
     Returns:
         assigned_labels (list): ニューロンに割り当てられたラベルのリスト
     """
-    presentation_time = presentation_time / ms
-    reset_time = reset_time / ms
+    presentation_time /= ms
+    reset_time /= ms
     interval_time = presentation_time + reset_time
 
     spike_cnt = np.zeros((n_neuron, n_labels))
-    for n, label in enumerate(set(input_labels)):
-        # 呈示時間を計算
+    for n, label in tqdm(enumerate(input_labels), desc="Assigning labels to neurons", total=len(input_labels)):
         start_time = n * interval_time
         end_time = (n + 1) * interval_time
-        # interval内のニューロン別のスパイク数をカウント
-        spikes_list = zip(spikemon.i, spikemon.t)
-        neuron_idx = [spike[0] for spike in spikes_list if spike[1]/ms >= start_time and spike[1]/ms < end_time]
-        neuron_idx = list(neuron_idx) # インターバル内に発火したニューロンidxのリスト
-        # neuron_idx = [18, 28, 10, ...]
-        for i in neuron_idx:
-            spike_cnt[i, label] += 1
-            
-    assigned_labels = np.zeros(n_neuron)
+        neuron_idx = [spike[0] for spike in list(zip(spikemon.i, spikemon.t)) if start_time <= spike[1]/ms < end_time]
+        spike_cnt[neuron_idx, label] += 1
+
+    assigned_labels = np.full(n_neuron, -1)  # デフォルトは-1で初期化
     for i in range(n_neuron):
-        max_indices = np.where(spike_cnt[i] == np.max(spike_cnt[i]))[0] # 最大値のインデックスを全て取得
-        assigned_labels[i] = random.choice(max_indices) # ランダムに1つ選択
-        
+        max_indices = np.where(spike_cnt[i] == spike_cnt[i].max())[0]
+        if max_indices.size > 0:
+            assigned_labels[i] = np.random.choice(max_indices)
+        else:
+            print(f"警告: ニューロン {i} のスパイク数が全て0です")
+            print(f"NaN の有無: {np.isnan(spike_cnt[i]).any()}")
+            print(f"inf の有無: {np.isinf(spike_cnt[i]).any()}")
+    
     return assigned_labels
 
-def get_accuracy(assigned_labels, input_labels):
-    """
-    割り当てられたラベルと入力されたラベルの精度を計算する
-    """
-    return np.sum(assigned_labels == input_labels) / len(input_labels)
 
-def reset_network(network:Network()):
+def reset_network(network):
     """
     ネットワークをリセットする
     """

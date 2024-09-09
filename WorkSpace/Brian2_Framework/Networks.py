@@ -1,9 +1,85 @@
 import pprint
 
-import Network.Neurons as Neurons
-import Network.Synapses as MySynapses
+from Brian2_Framework.Neurons import *
+from Brian2_Framework.Synapses import *
 from brian2 import *
 
+
+class Diehl_and_Cook_WTA:
+    """
+    Diehl and CookのWTAネットワークを作成します。
+    
+    Args:
+        n_inp (int): 入力ニューロンの数\n
+        n_e (int): 興奮ニューロンの数\n
+        n_i (int): 抑制ニューロンの数\n
+        max_rate (float): 最大発火率\n
+        neuron_params_e (dict): 興奮ニューロンのパラメータ\n
+        neuron_params_i (dict): 抑制ニューロンのパラメータ\n
+        static_synapse_params_ei (dict): 興奮ニューロンから抑制ニューロンへのシナプスのパラメータ\n
+        static_synapse_params_ie (dict): 抑制ニューロンから興奮ニューロンへのシナプスのパラメータ\n
+        stdp_synapse_params (dict): STDPシナプスのパラメータ
+    Returns:
+        brian2.Network: ネットワーク\n
+        list: ニューロンリスト\n
+        list: シナプスリスト
+    Methods:
+        enable_learning(): 学習を有効にします。\n
+        disable_learning(): 学習を無効にします。\n
+        change_image(image:np.ndarray, spontaneous_rate:int=0): 入力画像を変更します。
+    """
+    def __init__(self, enable_monitor:bool, n_inp, n_e, n_i, max_rate, neuron_params_e, neuron_params_i, static_synapse_params_ei, static_synapse_params_ie, stdp_synapse_params):
+        # Make instances of neurons and synapses
+        neuron_e = Conductance_LIF(neuron_params_e)
+        neuron_i = Conductance_LIF(neuron_params_i)
+        self.neuron_inp = Poisson_Input()
+        synapse_ei = NonSTDP(static_synapse_params_ei)
+        synapse_ie = NonSTDP(static_synapse_params_ie)
+        synapse_stdp = STDP(stdp_synapse_params)
+        
+        self.obj = {} # ネットワークのオブジェクトを格納する辞書
+
+        # Create network
+        self.obj["N_0"] = self.neuron_inp(n_inp, max_rate=max_rate, name="N_0")
+        self.obj["N_1"] = neuron_e(n_e, "N_middle", name="N_1")
+        self.obj["N_2"] = neuron_i(n_i, "N_output", name="N_2")
+
+        self.obj["S_0"] = synapse_stdp(self.obj["N_0"], self.obj["N_1"], name="S_0", connect=True) # 入力層から興奮ニューロン
+        self.obj["S_1"] = synapse_ei(self.obj["N_1"], self.obj["N_2"], "exc", name="S_1", delay=0*ms, connect="i==j") # 興奮ニューロンから抑制ニューロン
+        self.obj["S_2"] = synapse_ie(self.obj["N_2"], self.obj["N_1"], "inh", name="S_2", delay=0*ms, connect="i!=j") # 側抑制
+        
+        # Create monitors
+        if enable_monitor:
+            self.obj["spikemon_0"] = SpikeMonitor(self.obj["N_0"], record=True, name="spikemon_0")
+            self.obj["spikemon_2"] = SpikeMonitor(self.obj["N_2"], record=True, name="spikemon_2")
+            self.obj["statemon_1"] = StateMonitor(self.obj["N_1"], ["v", "I_noise", "Ie", "Ii", "ge", "gi"], record=50, name="statemon_1")
+            self.obj["statemon_2"] = StateMonitor(self.obj["N_2"], ["v", "I_noise", "Ie", "Ii", "ge", "gi"], record=50, name="statemon_2")
+            self.obj["statemon_S"] = StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=30000, name="statemon_S")
+        self.obj["spikemon_1"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_1") # ラベル割当に必要
+
+        self.network = Network(self.obj.values()) # ネットワークを作成
+
+    def enable_learning(self):
+        """
+        学習を有効にします。
+        """
+        self.obj["S_0"].namespace["sw"] = 1
+        
+    def disable_learning(self):
+        """
+        学習を無効にします。
+        """
+        self.obj["S_0"].namespace["sw"] = 0
+        
+    def change_image(self, image:np.ndarray, spontaneous_rate:int=0):
+        """
+        入力画像を変更します。
+
+        Args:
+            image (np.ndarray): 入力画像\n
+            spontaneous_rate (int, optional): 自発発火率. Defaults to 0.
+        """
+        self.neuron_inp.change_image(image, spontaneous_rate)
 
 class Cortex:
     """
@@ -160,3 +236,12 @@ class MiniColumn:
             elif i == "S_l4_l23":
                 self.network[i].set_states(default_synapse_param)
         self.network.run(0 * second)
+        
+
+
+
+
+
+
+
+

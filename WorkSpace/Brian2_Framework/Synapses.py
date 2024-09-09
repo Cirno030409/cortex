@@ -14,7 +14,6 @@ class STDP:
             dapre/dt = (-apre - alpha)/taupre : 1 (event-driven)
             dapost/dt = (-apost)/taupost : 1 (event-driven)
             w : 1
-            sw : 1
         """
 
         self.on_pre = """
