@@ -2,7 +2,7 @@ from keras.datasets import mnist
 import numpy as np
 import matplotlib.pyplot as plt
 
-def load_mnist():
+def get_mnist():
     """
     MNISTデータセットをダウンロードし、提供します。
 
@@ -28,7 +28,7 @@ def get_mnist_sample(n_samples=1, dataset='train'):
         images: 画像データ (numpy配列)
         labels: ラベルデータ (numpy配列)
     """
-    (img_train, label_train), (img_test, label_test) = load_mnist()
+    (img_train, label_train), (img_test, label_test) = get_mnist()
     
     if dataset == 'train':
         img, label = img_train, label_train
@@ -70,10 +70,10 @@ def get_mnist_sample_equality_labels(n_samples=1, dataset='train'):
     np.random.shuffle(combined)
     imgs, labels = zip(*combined)
         
-    return imgs, labels
+    return np.array(imgs), np.array(labels)
 
 def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
-    (img_train, label_train), (img_test, label_test) = load_mnist()
+    (img_train, label_train), (img_test, label_test) = get_mnist()
     if dataset == 'train':
         img, label_data = img_train, label_train
     elif dataset == 'test':
@@ -111,7 +111,7 @@ def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
         return downsampled_images, selected_labels
     return selected_images, selected_labels
 
-def show_mnist_image(images:list, labels:list) -> None:
+def show_mnist_image(images:list, labels:list=None) -> None:
     """
     提供されたMnist画像を表示します。
 
@@ -120,19 +120,49 @@ def show_mnist_image(images:list, labels:list) -> None:
         labels (list): Mnistラベル
     """
     plt.figure(figsize=(15, 9))
-    for i in range(len(images)):
-        plt.subplot(4, 5, i + 1)
+    n_images = len(images)
+    n_cols = 10
+    n_rows = (n_images + n_cols - 1) // n_cols
+    for i in range(n_images):
+        plt.subplot(n_rows, n_cols, i + 1)
         plt.imshow(images[i], cmap='gray')
-        plt.title(labels[i])
+        if labels is not None:
+            plt.title(labels[i])
         plt.axis('off')
     plt.show()
+    
+def divide_image_into_chunks(image, chunk_size):
+    """
+    一枚の画像データを指定されたサイズのチャンクに分割して、チャンク画像リストを返します。チャンクサイズは画像の約数である必要があります。
+
+    Args:
+        images (numpy.ndarray): 画像データ
+        chunk_size (int): チャンクのサイズ
+    """
+    # images[28, 28]
+    n_chunks = image.shape[0] // chunk_size
+    chunks = []
+    for i in range(n_chunks):
+        for j in range(n_chunks):
+            chunk = image[i*chunk_size:(i+1)*chunk_size, j*chunk_size:(j+1)*chunk_size]
+            chunks.append(chunk)
+    return np.array(chunks)
 
 if __name__ == "__main__":
     seed = 3
     np.random.seed(seed)
     images, labels = get_mnist_sample(n_samples=10000, dataset='train')
-    indices = [0, 2, 3, 4, 5, 6, 7, 8, 9]
+    indices = [0, 1, 2, 3] # 表示する画像のインデックス
     images = images[indices]
     labels = labels[indices]
-    show_mnist_image(images, labels)
+    chunks = []
+    for image in images:
+        chunks.extend(divide_image_into_chunks(image, 7))
+
+    show_mnist_image(chunks)
+    
+    
+    
+    
+    
     

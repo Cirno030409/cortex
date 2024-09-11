@@ -1,6 +1,9 @@
 from Brian2_Framework.Validator import Validator
 from brian2.units import *
 
+OBJECT_DIR = "examined_data/2024_09_09_18_54_46_2Epoch回したら？_comp" # 重みを保存したディレクトリ
+N_SAMPLES = 10000 # テストデータの数
+
 if __name__ == "__main__":
     seed = 3
     #! Neuron & Synapse Parameters
@@ -55,11 +58,24 @@ if __name__ == "__main__":
         "w": 22,
     }
     validator = Validator(
-                        weight_path="examined_data/2024_09_07_19_50_59_重みをnpyで保存_comp/weights.npy", 
-                        assigned_labels_path="examined_data/2024_09_07_19_50_59_重みをnpyで保存_comp/assigned_labels.pkl", 
+                        weight_path=f"{OBJECT_DIR}/weights.npy", 
+                        assigned_labels_path=f"{OBJECT_DIR}/assigned_labels.pkl", 
                         neuron_params_e=neuron_params_e, neuron_params_i=neuron_params_i, 
                         stdp_synapse_params=stdp_synapse_params, 
                         n_inp=784, n_e=100, n_i=100, max_rate=60, 
                         static_synapse_params_ei=static_synapse_params_ei, static_synapse_params_ie=static_synapse_params_ie,
                         network_type="WTA")
-    validator.validate(n_samples=10000)
+    acc, predict_labels, answer_labels, wronged_image_idx = validator.validate(n_samples=N_SAMPLES)
+    print(f"Accuracy: {acc}")
+    print(f"Wrongly predicted images: {wronged_image_idx}")
+    
+    # 結果を記録
+    with open(f"{OBJECT_DIR}/result.txt", "w") as f:
+        f.write(f"Accuracy: {acc*100}%\n")
+        f.write("\n[Answer labels -> Predict labels]\n")
+        for i in range(len(answer_labels)):
+            f.write(f"Image {i}: {answer_labels[i]} -> {predict_labels[i]}\n")
+        f.write("\n[Wrongly predicted images]\n")
+        f.write("Wrong Image idx: Answer labels -> Predict labels\n")
+        for idx in wronged_image_idx:
+            f.write(f"Image {idx}: {answer_labels[idx]} -> {predict_labels[idx]}\n")

@@ -8,35 +8,6 @@ import random
 import pickle as pkl
 from tqdm import tqdm
 
-class Neuron_counter():
-    def __init__(self, n_neuron:int, n_labels:int, interval:float):
-        """
-        ニューロンのスパイク数を、ラベル別にカウントします。
-
-        Args:
-            n_neuron (int): ニューロンの数
-            n_labels (int): ラベルの数
-            interval (float): インターバル時間(ms)
-        """
-        self.spike_cnt = np.zeros((n_neuron, n_labels))
-        self.interval = interval
-        self.n_calls = 0 # メソッドcount_spikesが呼び出された回数
-
-    def count_spikes(self, spikemon:SpikeMonitor, label:int):
-        """
-        特定インターバル内のスパイク数をラベル情報とともにカウントアップします。各インターバルで１回ずつ呼ばれるべきです。
-
-        Args:
-            spikemon (SpikeMonitor): スパイクモニター
-            label (int): ラベル
-        """
-        start_time = self.n_calls * self.interval
-        end_time = (self.n_calls + 1) * self.interval
-        neuron_idx = [spike[0] for spike in zip(spikemon.i, spikemon.t) if start_time <= spike[1]/ms < end_time] # インターバル内に発火したニューロンidxのリスト
-        # neuron_idx = [18, 28, 10, ...]
-        for i in neuron_idx: # インターバル内のスパイク数をニューロン別にカウント
-            spike_cnt[i] += 1
-
 def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
     """
     重みの合計値をgoal_sum_weightに正規化する
@@ -158,12 +129,12 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
     presentation_time /= ms
     reset_time /= ms
     interval_time = presentation_time + reset_time
-
+    spikes = list(zip(spikemon.i, spikemon.t))
     spike_cnt = np.zeros((n_neuron, n_labels))
-    for n, label in tqdm(enumerate(input_labels), desc="Assigning labels to neurons", total=len(input_labels)):
+    for n, label in tqdm(enumerate(input_labels), desc="assigning labels", total=len(input_labels)):
         start_time = n * interval_time
         end_time = (n + 1) * interval_time
-        neuron_idx = [spike[0] for spike in list(zip(spikemon.i, spikemon.t)) if start_time <= spike[1]/ms < end_time]
+        neuron_idx = [spike[0] for spike in spikes if start_time <= spike[1]/ms < end_time]
         spike_cnt[neuron_idx, label] += 1
 
     assigned_labels = np.full(n_neuron, -1)  # デフォルトは-1で初期化

@@ -18,6 +18,7 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Synapses import *
 
 seed = 2
+np.random.seed(seed)
 
 #! Neuron & Synapse Parameters
 neuron_params_e = {
@@ -76,21 +77,21 @@ WEIGHT_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp
 ASSIGNED_LABELS_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/assigned_labels.pkl"
 
 #! Network Parameters
-n_samples = 100 # 入力するMNISTデータの枚数
-epoch = 2 # エポック数
-n_inp = 784 # 入力層のニューロンの数
+n_samples = 10 # 入力するMNISTデータの枚数
+epoch = 1 # エポック数
+n_inp = 49 # 入力層のニューロンの数
 n_e = 100 # 興奮ニューロンの数
 n_i = 100 # 抑制ニューロンの数
-max_rate = 60 # 入力層の最大発火率
-exposure_time = 350*ms # 画像提示時間(ms)
+max_rate = 30 # 入力層の最大発火率
 spontaneous_rate = 0 # 自発発火率
+chunk_size = 7 # チャンクのサイズ
 
 #! Parameters for recording
-test_comment = "test" #! Comment for the experiment
+test_comment = "チャンクテスト" #! Comment for the experiment
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
-PLOT = False # プロットするか
+PLOT = True # プロットするか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
-RECORD_INTERVAL = 100 # 記録する間隔
+RECORD_INTERVAL = 10 # 記録する間隔
 SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
 
 os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
@@ -106,7 +107,6 @@ with open(SAVE_PATH + "parameters.json", "w") as f:
         "n_e": n_e,
         "n_i": n_i,
         "max_rate": max_rate,
-        "exposure_time": exposure_time,
         "spontaneous_rate": spontaneous_rate,
         "neuron_params_e": neuron_params_e,
         "neuron_params_i": neuron_params_i,
@@ -123,31 +123,30 @@ model = Diehl_and_Cook_WTA(PLOT,n_inp, n_e, n_i, max_rate, neuron_params_e, neur
 #! Run simulation =====================================================================
 print("[PROCESS] Running simulation...")
 print(f"[INFO] Examination comment: {test_comment}")
-all_labels = [] # 全Epochで入力された全ラベル
-for j in tqdm(range(epoch), desc="epoch progress", dynamic_ncols=True): # エポック数繰り返す
+for j in tqdm(range(epoch), desc="Epoch progress", dynamic_ncols=True): # エポック数繰り返す
     images, labels = Mnist.get_mnist_sample_equality_labels(n_samples, "train") # テスト用の画像とラベルを取得
-    all_labels.extend(labels)
+    chunks = []
+    for i in range(n_samples):
+        chunks.extend(Mnist.divide_image_into_chunks(images[i], chunk_size))
     try:
-        for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True): # 画像枚数繰り返す
+        for i in tqdm(range(len(chunks)), desc="Simulation progress", dynamic_ncols=True): # 画像枚数繰り返す
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
                 if i % RECORD_INTERVAL == 0:
-                    plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*n_samples))
+                    plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*len(chunks)))
             tools.normalize_weight(model.network["S_0"], 78, n_inp, n_e) # 重みの正規化
-            model.change_image(images[i], spontaneous_rate) # 入力画像の変更
-            model.network.run(exposure_time)
+            model.change_image(chunks[i], spontaneous_rate) # 入力画像の変更
+            model.network.run(100*ms)
             tools.reset_network(model.network)
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 #! =====================================================================================
 print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"],n_e, 10, all_labels, exposure_time, 0*ms) # ニューロンにラベルを割り当てる
+assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"],n_e, 10, labels, 350*ms, 0*ms) # ニューロンにラベルを割り当てる
 print(f"[INFO] Assigned labels: ")
 for i in range(len(assigned_labels)):
     print(f"\tneuron {i}: {assigned_labels[i]}")
-with open(SAVE_PATH + "assigned_labels.txt", "w") as f:
-    f.write("[Assigned labels]")
-    for i in range(len(assigned_labels)):
-        f.write(f"\tneuron {i}: {assigned_labels[i]}\n")
+with open(SAVE_PATH + "parameters.json", "a") as f:
+    f.write(f"\nassigned_labels: {assigned_labels}")
 with open(SAVE_PATH + "assigned_labels.pkl", "wb") as f:
     pkl.dump(assigned_labels, f)
     print(f"[INFO] Saved assigned labels to {SAVE_PATH + 'assigned_labels.pkl'}")

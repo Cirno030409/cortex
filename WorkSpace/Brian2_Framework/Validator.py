@@ -46,7 +46,7 @@ class Validator():
         predicted_labels = []
         interval = interval / ms
         spikes_list = list(zip(self.model.network["spikemon_1"].i, self.model.network["spikemon_1"].t)) # スパイクモニターからスパイクのリストを作成
-        for n, label in tqdm(enumerate(self.labels), desc="predicting", total=len(self.labels)):
+        for n, label in tqdm(enumerate(self.labels), desc="simulating", total=len(self.labels), dynamic_ncols=True):
             spike_cnt = np.zeros((n_neuron)) # 一つの入力画像に対するスパイク数をカウント
             # 呈示時間を計算
             start_time = n * interval
@@ -56,7 +56,7 @@ class Validator():
             # neuron_idx = [18, 28, 10, ...]
             for i in neuron_idx: # インターバル内のスパイク数をニューロン別にカウント
                 spike_cnt[i] += 1
-            predicted_labels.append(self.assigned_labels[np.argmax(spike_cnt)])
+            predicted_labels.append(int(self.assigned_labels[np.argmax(spike_cnt)]))
         
         return predicted_labels
     
@@ -64,23 +64,29 @@ class Validator():
         """
         割り当てられたラベルと入力されたラベルの精度を計算する
         """
-        return np.sum(answer_labels == learned_labels) / len(answer_labels), np.where(answer_labels != learned_labels)
+        return np.sum(answer_labels == learned_labels) / len(answer_labels), list(np.where(answer_labels != learned_labels)[0])
+    
     def validate(self, n_samples:int):
         """
         検証用のネットワークを実行してAccuracyを計算します。
         
         Args:
             n_samples (int): テストデータの数
+        Returns:
+            acc (float): 精度
+            predict_labels (list): 予測されたラベルのリスト
+            answer_labels (list): 正解のラベルのリスト
+            wronged_image_idx (list): 予測が間違えた画像のインデックスのリスト
         """
         image, self.labels = mnist.get_mnist_sample(n_samples=n_samples, dataset='test') # テストデータを取得
         print("[PROCESS] Validation started.")
-        for i in tqdm(range(n_samples), desc="validation"):
+        for i in tqdm(range(n_samples), desc="assigning labels", dynamic_ncols=True):
             self.model.change_image(image[i])
             self.model.network.run(350*ms)
             tools.reset_network(self.model.network)
         
         predict_labels = self._predict(interval=350*ms, n_neuron=100, n_labels=10)
-        acc = self._get_accuracy(self.labels, predict_labels)
+        acc, wronged_image_idx = self._get_accuracy(self.labels, predict_labels)
         
         print(f"[INFO] Accuracy: {acc}")
         if n_samples <= 100:
@@ -90,6 +96,8 @@ class Validator():
             print(f"[INFO] True labels: ")
             for i in range(len(self.labels)):
                 print(f"\tImage {i}: {self.labels[i]}")
+                
+        return acc, predict_labels, self.labels, wronged_image_idx
         
 
 

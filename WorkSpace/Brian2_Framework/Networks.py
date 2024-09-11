@@ -52,9 +52,9 @@ class Diehl_and_Cook_WTA:
         if enable_monitor:
             self.obj["spikemon_0"] = SpikeMonitor(self.obj["N_0"], record=True, name="spikemon_0")
             self.obj["spikemon_2"] = SpikeMonitor(self.obj["N_2"], record=True, name="spikemon_2")
-            self.obj["statemon_1"] = StateMonitor(self.obj["N_1"], ["v", "I_noise", "Ie", "Ii", "ge", "gi"], record=50, name="statemon_1")
-            self.obj["statemon_2"] = StateMonitor(self.obj["N_2"], ["v", "I_noise", "Ie", "Ii", "ge", "gi"], record=50, name="statemon_2")
-            self.obj["statemon_S"] = StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=30000, name="statemon_S")
+            self.obj["statemon_1"] = StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_1")
+            self.obj["statemon_2"] = StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_2")
+            self.obj["statemon_S"] = StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=0, name="statemon_S")
         self.obj["spikemon_1"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_1") # ラベル割当に必要
 
         self.network = Network(self.obj.values()) # ネットワークを作成
