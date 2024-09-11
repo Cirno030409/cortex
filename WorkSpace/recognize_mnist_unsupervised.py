@@ -76,17 +76,17 @@ WEIGHT_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp
 ASSIGNED_LABELS_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/assigned_labels.pkl"
 
 #! Network Parameters
-n_samples = 100 # 入力するMNISTデータの枚数
-epoch = 2 # エポック数
+n_samples = 40000 # 入力するMNISTデータの枚数
+epoch = 5 # エポック数
+exposure_time = 350*ms # 画像提示時間(ms)
 n_inp = 784 # 入力層のニューロンの数
 n_e = 100 # 興奮ニューロンの数
 n_i = 100 # 抑制ニューロンの数
 max_rate = 60 # 入力層の最大発火率
-exposure_time = 350*ms # 画像提示時間(ms)
 spontaneous_rate = 0 # 自発発火率
 
 #! Parameters for recording
-test_comment = "test" #! Comment for the experiment
+test_comment = "呈示350ms5epochチャレンジ" #! Comment for the experiment
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
 PLOT = False # プロットするか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
@@ -132,7 +132,7 @@ for j in tqdm(range(epoch), desc="epoch progress", dynamic_ncols=True): # エポ
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
                 if i % RECORD_INTERVAL == 0:
                     plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*n_samples))
-            tools.normalize_weight(model.network["S_0"], 78, n_inp, n_e) # 重みの正規化
+            tools.normalize_weight(model.network["S_0"], n_inp // 10, n_inp, n_e) # 重みの正規化
             model.change_image(images[i], spontaneous_rate) # 入力画像の変更
             model.network.run(exposure_time)
             tools.reset_network(model.network)

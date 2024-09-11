@@ -77,21 +77,22 @@ WEIGHT_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp
 ASSIGNED_LABELS_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/assigned_labels.pkl"
 
 #! Network Parameters
-n_samples = 10 # 入力するMNISTデータの枚数
+n_samples = 10000 # 入力するMNISTデータの枚数
 epoch = 1 # エポック数
+exposure_time = 350*ms
 n_inp = 49 # 入力層のニューロンの数
 n_e = 100 # 興奮ニューロンの数
 n_i = 100 # 抑制ニューロンの数
-max_rate = 30 # 入力層の最大発火率
+max_rate = 200 # 入力層の最大発火率
 spontaneous_rate = 0 # 自発発火率
 chunk_size = 7 # チャンクのサイズ
 
 #! Parameters for recording
-test_comment = "チャンクテスト" #! Comment for the experiment
+test_comment = "チャンクテスト10000枚" #! Comment for the experiment
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
 PLOT = True # プロットするか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
-RECORD_INTERVAL = 10 # 記録する間隔
+RECORD_INTERVAL = 50 # 記録する間隔
 SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
 
 os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
@@ -133,15 +134,15 @@ for j in tqdm(range(epoch), desc="Epoch progress", dynamic_ncols=True): # エポ
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
                 if i % RECORD_INTERVAL == 0:
                     plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*len(chunks)))
-            tools.normalize_weight(model.network["S_0"], 78, n_inp, n_e) # 重みの正規化
+            tools.normalize_weight(model.network["S_0"], n_inp//10, n_inp, n_e) # 重みの正規化
             model.change_image(chunks[i], spontaneous_rate) # 入力画像の変更
-            model.network.run(100*ms)
+            model.network.run(exposure_time)
             tools.reset_network(model.network)
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 #! =====================================================================================
 print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"],n_e, 10, labels, 350*ms, 0*ms) # ニューロンにラベルを割り当てる
+assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"],n_e, 10, labels, exposure_time, 0*ms) # ニューロンにラベルを割り当てる
 print(f"[INFO] Assigned labels: ")
 for i in range(len(assigned_labels)):
     print(f"\tneuron {i}: {assigned_labels[i]}")
