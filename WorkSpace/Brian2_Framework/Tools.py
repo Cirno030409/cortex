@@ -7,6 +7,8 @@ import pprint as pp
 import random
 import pickle as pkl
 from tqdm import tqdm
+import time
+import shutil
 
 def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
     """
@@ -83,34 +85,35 @@ def adjust_firing_rate(image, target_mean_rate, max_rate):
     
 def convert_quantity(obj):
     """
-    Quantityオブジェクトを数値に変換する関数
+    Quantityオブジェクトを文字列に変換する関数
     """
     if isinstance(obj, Quantity):
-        return float(obj)  # 単位を無視して数値のみを返す
+        value = str(obj)
+        units = ["ms", "second", "ks", "Hz", "kHz", "mV", "V", "nS", "uS", "S", "nF", "uF", "F"]
+        for unit in units:
+            value = value.replace(unit, f"*{unit}")
+        return value  # Quantityオブジェクトを文字列に変換
     elif isinstance(obj, np.ndarray):
-        return obj.tolist()  # ndarrayをリストに変換
+        raise ValueError("ndarrayは変換できません")
     else:
         return str(obj)  # その他のオブジェクトは文字列に変換
     
-def print_firing_rate(spikemon):
+def get_spikes_within_time_range(spikemon, start_time, end_time):
     """
-    スパイクモニターからニューロンごとの発火率を取得する
+    スパイクモニターから指定された時間範囲内のスパイクを取得する
+    
+    Args:
+        spikemon (SpikeMonitor): スパイクモニター
+        start_time (float): 開始時間(ms)
+        end_time (float): 終了時間(ms)
+    Returns:
+        spikes (list): スパイクのリスト
+            spikes = [spikemon.t, spikemon.i]
     """
-    # スパイクモニターからニューロンごとの発火率を計算
-    spike_counts = spikemon.count
-    duration = spikemon.t[-1] - spikemon.t[0]
-    firing_rates = spike_counts / (duration / second)
-    
-    # 発火率を表示
-    print("ニューロンごとの発火率 (Hz):")
-    for i, rate in enumerate(firing_rates):
-        print(f"ニューロン {i}: {rate:.2f} Hz")
-    
-    # 平均発火率を計算して表示
-    average_rate = np.mean(firing_rates)
-    print(f"\n平均発火率: {average_rate:.2f} Hz")
-    
-    return firing_rates
+    spikes = list(zip(spikemon.t, spikemon.i))
+    spikes = [spike for spike in spikes if start_time <= spike[0] < end_time] # 単位そのままで比較
+    return spikes
+
 
 def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:list, presentation_time, reset_time):
     """
@@ -149,10 +152,74 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
     
     return assigned_labels
 
+def change_dir_name(dir_path, add_name):
+    """
+    ディレクトリ名を変更する
+    
+    Args:
+        dir_path (str): 変更するディレクトリのパス
+        new_name (str): 新しいディレクトリ名
+    Returns:
+        None
+    """
+    # 完了したのでディレクトリ名を変更
+    new_save_path = dir_path[:-1] + add_name
+    print("dir_path: ", dir_path)
+    print("new_save_path: ", new_save_path)
+    if not os.path.exists(new_save_path):
+        os.makedirs(new_save_path)
+    for filename in os.listdir(dir_path):
+        old_file = os.path.join(dir_path, filename)
+        new_file = os.path.join(new_save_path, filename)
+        os.rename(old_file, new_file)
+    time.sleep(1)
+    shutil.rmtree(dir_path)
+    print(f"[INFO] ディレクトリ名を {new_save_path} に変更しました。")
+    return new_save_path
+
+def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=False):
+    """
+    スパイクモニターからニューロンごとの発火率を取得する
+    
+    Args:
+        spikemon (SpikeMonitor): スパイクモニター
+        start_time (float): 開始時間(ms)
+        end_time (float): 終了時間(ms)
+        enable_print (bool): 発火率を表示するか
+    Returns:
+        firing_rates (np.ndarray): ニューロンごとの発火率
+    """
+    # spikemon.count[n_neurons]
+    # スパイクモニターからニューロンごとの発火率を計算
+    if start_time is None and end_time is None:
+        spike_counts = spikemon.count
+        duration = spikemon.t.max()
+    else:
+        duration = end_time - start_time
+        spikes = get_spikes_within_time_range(spikemon, start_time, end_time)
+        spikes = [spike[1] for spike in spikes]
+        spike_counts = np.bincount(spikes, minlength=len(spikemon.count))
+    
+    firing_rates = spike_counts / (duration / second)
+    
+    # 発火率を表示
+    if enable_print:
+        print("ニューロンごとの発火率 (Hz):")
+        for i, rate in enumerate(firing_rates):
+            print(f"ニューロン {i}: {rate:.2f} Hz")
+
+    average_rate = np.mean(firing_rates)
+    
+    # 平均発火率を計算して表示
+    if enable_print:
+        print(f"\n平均発火率: {average_rate:.2f} Hz")
+    
+    return firing_rates
+
 
 def reset_network(network):
     """
-    ネットワークをリセットする
+    ネットワークをリセットします。
     """
     # ニューロン
     neurons = [obj for obj in network.objects if isinstance(obj, NeuronGroup)]
@@ -172,10 +239,41 @@ def reset_network(network):
         except:
             pass
 
+def load_parameters(file_path:str):
+    """
+    JSONファイルからパラメータを読み込みます。Brian2の単位変換も行います。
 
+    Args:
+        file_path (str): JSONファイルのパス
+    Returns:
+        parameters (dict): パラメータの辞書
+    """
+    with open(file_path, "r") as f:
+        loaded_data = json.load(f)
+    for key_name in loaded_data.keys():
+        if isinstance(loaded_data[key_name], dict):
+            for key, value in loaded_data[key_name].items():
+                if isinstance(value, str) and '*' in value:
+                    value, unit = value.split('*')
+                    loaded_data[key_name][key] = float(value) * eval(unit)
+        else:
+            if isinstance(loaded_data[key_name], str) and '*' in loaded_data[key_name]:
+                value, unit = loaded_data[key_name].split('*')
+                loaded_data[key_name] = float(value) * eval(unit)
+    return loaded_data
 
-        
+def save_parameters(file_path:str, parameters:dict):
+    """
+    JSONファイルにパラメータを保存します。Brian2の単位変換も行います。
 
+    Args:
+        file_path (str): JSONファイルのパス
+        parameters (dict): パラメータの辞書
+    Returns:
+        None
+    """
+    with open(file_path + "parameters.json", "w") as f:
+        json.dump(parameters, f, indent=4, default=convert_quantity)
 
 
 

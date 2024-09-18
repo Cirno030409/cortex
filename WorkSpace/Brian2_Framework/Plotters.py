@@ -3,6 +3,8 @@ import numpy as np
 from brian2 import *
 import os
 import glob
+import Brian2_Framework.Tools as tools
+import seaborn as sns
 
 class Common_Plotter:
     """
@@ -78,7 +80,7 @@ class Common_Plotter:
         plt.xlim(0, self.simu_time*1000)
         plt.title(fig_title)
                 
-    def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0):
+    def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0, assigned_labels=None):
         """
         与えられたステートモニターから重みのプロットを描画します。
 
@@ -89,6 +91,7 @@ class Common_Plotter:
             save_fig (bool): フィグを保存するかどうか
             save_path (str): フィグを保存するパス
             n_this_fig (int): このフィグの番号（保存する際のファイル名になる)
+            assigned_labels (list): 割り当てられたラベルのリスト
         """
         # synapse.w[neuron_idx][time_idx]
         weight_mat = np.zeros((n_pre, n_post))
@@ -109,6 +112,9 @@ class Common_Plotter:
             cax = axes[img].matshow(weightloop, cmap="viridis")
             axes[img].set_xticks([])
             axes[img].set_yticks([])
+            
+            if assigned_labels is not None:
+                axes[img].set_xlabel(f"{assigned_labels[img]}", fontsize=8)
 
         # 余分なサブプロットを非表示にする
         for img in range(n_post, n_rows * n_cols):
@@ -135,10 +141,43 @@ class Common_Plotter:
                     print(f"\tDeleted {f}")
             plt.savefig(save_path + f"{n_this_fig}.png")
             
-            plt.close()    
+            plt.close()   
+            
+    def firing_rate_heatmap(self, spikemon, start_time, end_time, save_fig=False, save_path=None, n_this_fig=None):
+        """
+        与えられたスパイクモニターから発火率のヒートマップを描画します。
+
+        Args:
+            spikemon (SpikeMonitor): スパイクモニター
+            start_time (float): 開始時間
+            end_time (float): 終了時間
+            save_fig (bool): フィグを保存するかどうか
+            save_path (str): フィグを保存するパス
+            n_this_fig (int): このフィグの番号（保存する際のファイル名になる)
+        """
+
+        firing_rates = tools.get_firing_rate(spikemon, start_time, end_time)
+        n_neurons = len(firing_rates)
+        side_length = int(np.ceil(np.sqrt(n_neurons)))
         
+        heatmap_data = np.zeros((side_length, side_length))
+        for i in range(n_neurons):
+            row = i // side_length
+            col = i % side_length
+            heatmap_data[row, col] = firing_rates[i]
         
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(heatmap_data, cmap='viridis', annot=True, fmt='.2f', cbar=True)
+        plt.title(f'Firing Rate Heatmap ({start_time} to {end_time})')
+        plt.xlabel('Neuron Index')
+        plt.ylabel('Neuron Index')
         
+        if save_fig:
+            plt.savefig(f'{save_path}{n_this_fig}_rate_heatmap.png', dpi=300, bbox_inches='tight')
+        else:
+            plt.show()
+        
+        plt.close()
 class Plotter:
     """
     プロットを行うクラス．

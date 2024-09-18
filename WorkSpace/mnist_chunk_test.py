@@ -20,75 +20,14 @@ from Brian2_Framework.Synapses import *
 seed = 2
 np.random.seed(seed)
 
-#! Neuron & Synapse Parameters
-neuron_params_e = {
-    "I_noise"       : 0,        # 定常入力電流
-    "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
-    "taugi"         : 2*ms,     # 抑制性ニューロンのコンダクタンスの時定数
-    "taum"          : 100*ms,    # 膜電位の時定数
-    "theta_dt"      : 0.05,      # ホメオスタシスの発火閾値の上昇値
-    "tautheta"      : 1e7*ms,   # ホメオスタシスの発火閾値の上昇値の減衰時定数
-    "v_rev_e"       : 0,        # 興奮性ニューロンの平衡膜電位
-    "v_rev_i"       : -100,     # 抑制性ニューロンの平衡膜電位
-    "refractory"    : 2 * ms,   # 不応期
-    "v_reset"       : -60,      # リセット電位
-    "v_rest"        : -50,      # 静止膜電位
-    "v_th"          : -40       # 発火閾値
-}
-
-neuron_params_i = {
-    "I_noise"       : 0,        # 定常入力電流
-    "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
-    "taugi"         : 2*ms,     # 抑制性ニューロンのコンダクタンスの時定数
-    "taum"          : 10*ms,    # 膜電位の時定数
-    "theta_dt"      : 0,      # ホメオスタシスの発火閾値の上昇値
-    "tautheta"      : 1e7*ms,   # ホメオスタシスの発火閾値の上昇値の減衰時定数
-    "v_rev_e"       : 0,        # 興奮性ニューロンの平衡膜電位
-    "v_rev_i"       : -100,     # 抑制性ニューロンの平衡膜電位
-    "refractory"    : 2 * ms,   # 不応期
-    "v_reset"       : -60,      # リセット電位
-    "v_rest"        : -50,      # 静止膜電位
-    "v_th"          : -40       # 発火閾値
-}
-
-stdp_synapse_params = {
-    "wmax": 1,              # 最大重み
-    "wmin": 0,              # 最小重み
-    "Apre": 1,           # 前ニューロンのスパイクトレースのリセット値
-    "Apost": 1,             # 後ニューロンのスパイクトレースのリセット値
-    "taupre": 20 * ms,      # 前ニューロンのスパイクトレースの時定数
-    "taupost": 20 * ms,     # 後ニューロンのスパイクトレースの時定数
-    "nu_pre": 0.01,        # 学習率
-    "nu_post": 0.0001,       # 学習率
-    "alpha": 0,          # スパイクトレースの収束地点
-    "sw": 1,             # 学習の有無の切り替え
-}
-
-static_synapse_params_ei = {
-    "w": 30,
-}
-
-static_synapse_params_ie = {
-    "w": 22,
-}
+params = tools.load_params("Brian2_Framework/parameters/Chunk_WTA.json")
 
 # 読み込み用
 WEIGHT_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/weights.b2"
 ASSIGNED_LABELS_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/assigned_labels.pkl"
 
-#! Network Parameters
-n_samples = 10000 # 入力するMNISTデータの枚数
-epoch = 1 # エポック数
-exposure_time = 350*ms
-n_inp = 49 # 入力層のニューロンの数
-n_e = 100 # 興奮ニューロンの数
-n_i = 100 # 抑制ニューロンの数
-max_rate = 200 # 入力層の最大発火率
-spontaneous_rate = 0 # 自発発火率
-chunk_size = 7 # チャンクのサイズ
-
 #! Parameters for recording
-test_comment = "チャンクテスト10000枚" #! Comment for the experiment
+test_comment = "チャンクWTAテスト" #! Comment for the experiment
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
 PLOT = True # プロットするか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
@@ -99,50 +38,50 @@ os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
 print(f"[INFO] Created directory: {SAVE_PATH}")
 
 # パラメータをメモる
-with open(SAVE_PATH + "parameters.json", "w") as f:
-    parameters = {
-        "n_samples": n_samples,
-        "epoch": epoch,
-        "seed": seed,
-        "n_inp": n_inp,
-        "n_e": n_e,
-        "n_i": n_i,
-        "max_rate": max_rate,
-        "spontaneous_rate": spontaneous_rate,
-        "neuron_params_e": neuron_params_e,
-        "neuron_params_i": neuron_params_i,
-        "stdp_synapse_params": stdp_synapse_params,
-        "static_synapse_params_ei": static_synapse_params_ei,
-        "static_synapse_params_ie": static_synapse_params_ie
-    }
-    json.dump(parameters, f, indent=4, default=tools.convert_quantity)
+tools.save_parameters(SAVE_PATH, params)
 
 plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
 # ネットワークを作成
-model = Diehl_and_Cook_WTA(PLOT,n_inp, n_e, n_i, max_rate, neuron_params_e, neuron_params_i, static_synapse_params_ei, static_synapse_params_ie, stdp_synapse_params)
+model = Chunk_WTA(PLOT,
+                  params["n_inp"], 
+                  params["n_e"], 
+                  params["n_i"], 
+                  params["max_rate"], 
+                  params["neuron_params_1e"], 
+                  params["neuron_params_1i"], 
+                  params["neuron_params_2e"], 
+                  params["neuron_params_2i"], 
+                  params["static_synapse_params_1ei"], 
+                  params["static_synapse_params_1ie"], 
+                  params["static_synapse_params_2ei"], 
+                  params["static_synapse_params_2ie"], 
+                  params["stdp_synapse_params_1"], 
+                  params["stdp_synapse_params_2"])
 
 #! Run simulation =====================================================================
 print("[PROCESS] Running simulation...")
 print(f"[INFO] Examination comment: {test_comment}")
-for j in tqdm(range(epoch), desc="Epoch progress", dynamic_ncols=True): # エポック数繰り返す
-    images, labels = Mnist.get_mnist_sample_equality_labels(n_samples, "train") # テスト用の画像とラベルを取得
+for j in tqdm(range(params["epoch"]), desc="Epoch progress", dynamic_ncols=True): # エポック数繰り返す
+    images, labels = Mnist.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得
     chunks = []
-    for i in range(n_samples):
-        chunks.extend(Mnist.divide_image_into_chunks(images[i], chunk_size))
+    for i in range(params["n_samples"]):
+        chunks.extend(Mnist.divide_image_into_chunks(images[i], params["chunk_size"]))
     try:
         for i in tqdm(range(len(chunks)), desc="Simulation progress", dynamic_ncols=True): # 画像枚数繰り返す
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
                 if i % RECORD_INTERVAL == 0:
-                    plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*len(chunks)))
-            tools.normalize_weight(model.network["S_0"], n_inp//10, n_inp, n_e) # 重みの正規化
-            model.change_image(chunks[i], spontaneous_rate) # 入力画像の変更
-            model.network.run(exposure_time)
+                    plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=str(i+(j*len(chunks)))+"_S0")
+                    plotter.weight_plot(model.network["S_1_2"], n_pre=params["n_e"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=str(i+(j*len(chunks)))+"_S12")
+            tools.normalize_weight(model.network["S_0"], params["n_inp"]//10, params["n_inp"], params["n_e"]) # 重みの正規化
+            tools.normalize_weight(model.network["S_1_2"], params["n_e"]//10, params["n_e"], params["n_e"]) # 重みの正規化
+            model.change_image(chunks[i], params["spontaneous_rate"]) # 入力画像の変更
+            model.network.run(params["exposure_time"])
             tools.reset_network(model.network)
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 #! =====================================================================================
 print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"],n_e, 10, labels, exposure_time, 0*ms) # ニューロンにラベルを割り当てる
+assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"], params["n_e"], 10, labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
 print(f"[INFO] Assigned labels: ")
 for i in range(len(assigned_labels)):
     print(f"\tneuron {i}: {assigned_labels[i]}")
@@ -160,7 +99,7 @@ if SAVE_WEIGHT_CHANGE_GIF:
     print("[PROCESS] Saving weight change GIF...")
     tools.make_gif(25, SAVE_PATH, SAVE_PATH, "weight_change.gif")
     
-plotter.weight_plot(model.network["S_0"], n_pre=n_inp, n_post=n_e, title="weight plot of S0")
+plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], title="weight plot of S0")
 plt.savefig(SAVE_PATH + "weight_plot_S0.png")
 
 # シミュレーション結果をプロット

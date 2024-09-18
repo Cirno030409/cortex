@@ -1,7 +1,11 @@
-from Brian2_Framework.Validator import Validator
 from brian2.units import *
+import os
 
-OBJECT_DIR = "examined_data/2024_09_09_18_54_46_2Epoch回したら？_comp" # 重みを保存したディレクトリ
+from Brian2_Framework.Validator import Validator
+import Brian2_Framework.Tools as tools
+import json
+
+OBJECT_DIR = "examined_data/2024_09_07_19_50_59_重みをnpyで保存_homesta_comp/" # 重みを保存したディレクトリ
 N_SAMPLES = 10000 # テストデータの数
 
 if __name__ == "__main__":
@@ -12,7 +16,7 @@ if __name__ == "__main__":
         "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
         "taugi"         : 2*ms,     # 抑制性ニューロンのコンダクタンスの時定数
         "taum"          : 100*ms,    # 膜電位の時定数
-        "theta_dt"      : 0.05,      # ホメオスタシスの発火閾値の上昇値
+        "theta_dt"      : 0.08,      # ホメオスタシスの発火閾値の上昇値
         "tautheta"      : 1e7*ms,   # ホメオスタシスの発火閾値の上昇値の減衰時定数
         "v_rev_e"       : 0,        # 興奮性ニューロンの平衡膜電位
         "v_rev_i"       : -100,     # 抑制性ニューロンの平衡膜電位
@@ -57,6 +61,20 @@ if __name__ == "__main__":
     static_synapse_params_ie = {
         "w": 22,
     }
+    
+    with open(os.path.join(OBJECT_DIR, "parameters_validate.json"), "w") as f:
+        parameters = {
+            "neuron_params_e": neuron_params_e,
+            "neuron_params_i": neuron_params_i,
+            "stdp_synapse_params": stdp_synapse_params,
+            "static_synapse_params_ei": static_synapse_params_ei,
+            "static_synapse_params_ie": static_synapse_params_ie,
+            "n_inp": 784,
+            "n_e": 100,
+            "n_i": 100,
+            "max_rate": 60,
+        }
+        json.dump(parameters, f, indent=4, default=tools.convert_quantity)
     validator = Validator(
                         weight_path=f"{OBJECT_DIR}/weights.npy", 
                         assigned_labels_path=f"{OBJECT_DIR}/assigned_labels.pkl", 
@@ -79,3 +97,5 @@ if __name__ == "__main__":
         f.write("Wrong Image idx: Answer labels -> Predict labels\n")
         for idx in wronged_image_idx:
             f.write(f"Image {idx}: {answer_labels[idx]} -> {predict_labels[idx]}\n")
+            
+    tools.change_dir_name(OBJECT_DIR, f"_validated_acc={acc*100:.2f}%")

@@ -92,21 +92,8 @@ class Conductance_LIF:
         """      
 
         
-    def __call__(self, N, exc_or_inh:str=None, *args, **kwargs) -> Any:
-        # if exc_or_inh == "exc":
-        #     self.params.update({
-        #         "refractory" : 2 * ms,
-        #         "v_reset" : -60,
-        #         "v_th" : -40
-        #     })
-        # elif exc_or_inh == "inh":
-        #     self.params.update({
-        #         "refractory" : 2 * ms,
-        #         "v_reset" : -60,
-        #         "v_th" : -40
-        #     })
-        # else :
-        #     raise Exception("Neuron type must be 'exc' or 'inh'")
+    def __call__(self, N, *args, **kwargs) -> Any:
+
         neuron =  NeuronGroup(N, model=self.model, threshold="v>(v_th + theta)", reset="v=v_reset; theta+=theta_dt", refractory="refractory", method="euler", namespace=self.params, *args, **kwargs)
         neuron.v = self.params["v_reset"]
         neuron.ge = 0

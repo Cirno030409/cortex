@@ -3,7 +3,7 @@
 """
 from brian2 import *
 import Brian2_Framework.Mnist as mnist
-from Brian2_Framework.Networks import Diehl_and_Cook_WTA
+from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA
 import Brian2_Framework.Tools as tools
 from brian2.units import *
 import numpy as np
@@ -23,6 +23,8 @@ class Validator():
         """
         if network_type == "WTA":
             self.model = Diehl_and_Cook_WTA(enable_monitor=False, **kwargs) # ネットワークを作成
+        elif network_type == "Chunk_WTA":
+            self.model = Chunk_WTA(enable_monitor=False, **kwargs) # ネットワークを作成
         else:
             raise ValueError("Invalid network type")
         with open(weight_path, "rb") as f: # 重みを読み込む
@@ -32,7 +34,7 @@ class Validator():
         with open(assigned_labels_path, "rb") as f:
             self.assigned_labels = pickle.load(f)
 
-    def _predict(self, interval, n_neuron:int, n_labels:int):
+    def _predict_labels(self, interval, n_neuron:int, n_labels:int):
         """
         ニューロンの発火情報と割り当てられたラベルを見て、テスト画像のラベルを予測します。
         
@@ -45,8 +47,8 @@ class Validator():
         """
         predicted_labels = []
         interval = interval / ms
-        spikes_list = list(zip(self.model.network["spikemon_1"].i, self.model.network["spikemon_1"].t)) # スパイクモニターからスパイクのリストを作成
-        for n, label in tqdm(enumerate(self.labels), desc="simulating", total=len(self.labels), dynamic_ncols=True):
+        spikes_list = list(zip(self.model.network["spikemon_for_assign"].i, self.model.network["spikemon_for_assign"].t)) # スパイクモニターからスパイクのリストを作成
+        for n, label in tqdm(enumerate(self.labels), desc="assigning labels", total=len(self.labels), dynamic_ncols=True):
             spike_cnt = np.zeros((n_neuron)) # 一つの入力画像に対するスパイク数をカウント
             # 呈示時間を計算
             start_time = n * interval
@@ -80,12 +82,12 @@ class Validator():
         """
         image, self.labels = mnist.get_mnist_sample(n_samples=n_samples, dataset='test') # テストデータを取得
         print("[PROCESS] Validation started.")
-        for i in tqdm(range(n_samples), desc="assigning labels", dynamic_ncols=True):
+        for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
             self.model.change_image(image[i])
-            self.model.network.run(350*ms)
+            self.model.network.run(150*ms)
             tools.reset_network(self.model.network)
         
-        predict_labels = self._predict(interval=350*ms, n_neuron=100, n_labels=10)
+        predict_labels = self._predict_labels(interval=150*ms, n_neuron=100, n_labels=10)
         acc, wronged_image_idx = self._get_accuracy(self.labels, predict_labels)
         
         print(f"[INFO] Accuracy: {acc}")
