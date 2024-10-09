@@ -2,7 +2,7 @@
 既存のネットワークを使ってAccuracyを計算します。
 """
 from brian2 import *
-import Brian2_Framework.Mnist as mnist
+import Brian2_Framework.Datasets as mnist
 from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA
 import Brian2_Framework.Tools as tools
 from brian2.units import *
@@ -11,20 +11,26 @@ from tqdm import tqdm
 import pickle
 from Brian2_Framework.Plotters import Common_Plotter
 import pprint as pp
+import matplotlib.pyplot as plt
+import os
 class Validator():
     
-    def __init__(self, weight_path:str, assigned_labels_path:str, network_type:str, **kwargs):
+    def __init__(self, weight_path:str, assigned_labels_path:str, network_type:str, params_json_path:str):
         """
         ネットワークでAccuracyを計算するValidatorを作成します。
 
         Args:
-            weight_path (str): _description_
-            answer_assigned_labels (list): _description_
+            weight_path (str): 重みを保存したパス
+            assigned_labels_path (str): 割り当てられたラベルを保存したパス
+            network_type (str): ネットワークの種類
+            params_json_path (str): ネットワークのパラメータを保存したjsonファイルのパス
         """
+        self.weight_path = weight_path
+        self.params = tools.load_parameters(params_json_path)
         if network_type == "WTA":
-            self.model = Diehl_and_Cook_WTA(enable_monitor=False, **kwargs) # ネットワークを作成
+            self.model = Diehl_and_Cook_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
         elif network_type == "Chunk_WTA":
-            self.model = Chunk_WTA(enable_monitor=False, **kwargs) # ネットワークを作成
+            self.model = Chunk_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
         else:
             raise ValueError("Invalid network type")
         with open(weight_path, "rb") as f: # 重みを読み込む
@@ -44,8 +50,10 @@ class Validator():
             n_labels (int): ラベルの数
         Returns:
             predicted_labels (list): 予測されたラベルのリスト
+            won_neurons_idx (list): Winnerになったニューロンのインデックスのリスト
         """
         predicted_labels = []
+        won_neurons_idx = []
         interval = interval / ms
         spikes_list = list(zip(self.model.network["spikemon_for_assign"].i, self.model.network["spikemon_for_assign"].t)) # スパイクモニターからスパイクのリストを作成
         for n, label in tqdm(enumerate(self.labels), desc="assigning labels", total=len(self.labels), dynamic_ncols=True):
@@ -59,8 +67,9 @@ class Validator():
             for i in neuron_idx: # インターバル内のスパイク数をニューロン別にカウント
                 spike_cnt[i] += 1
             predicted_labels.append(int(self.assigned_labels[np.argmax(spike_cnt)]))
+            won_neurons_idx.append(np.argmax(spike_cnt))
         
-        return predicted_labels
+        return predicted_labels, won_neurons_idx
     
     def _get_accuracy(self, answer_labels, learned_labels):
         """
@@ -84,11 +93,16 @@ class Validator():
         print("[PROCESS] Validation started.")
         for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
             self.model.change_image(image[i])
-            self.model.network.run(150*ms)
+            self.model.network.run(self.params["exposure_time"])
             tools.reset_network(self.model.network)
         
-        predict_labels = self._predict_labels(interval=150*ms, n_neuron=100, n_labels=10)
+        predict_labels, won_neurons_idx = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=10)
         acc, wronged_image_idx = self._get_accuracy(self.labels, predict_labels)
+        
+        object_dir_path = os.path.dirname(self.weight_path)
+        os.makedirs(object_dir_path + "/results", exist_ok=True)
+        for idx in wronged_image_idx:
+            plt.imsave(object_dir_path + f"/results/wrong_image_{idx}.png", image[idx], cmap="gray")
         
         print(f"[INFO] Accuracy: {acc}")
         if n_samples <= 100:

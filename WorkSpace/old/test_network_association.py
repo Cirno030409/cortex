@@ -6,7 +6,7 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Synapses import *
 import Brian2_Framework.Plotters as Plotters
 import matplotlib.pyplot as plt
-import Brian2_Framework.Mnist as Mnist
+import Brian2_Framework.Datasets as Datasets
 
 params = {
     "I_noise"       : 0,
@@ -23,8 +23,8 @@ neuron = Conductance_LIF(params)
 synapse = NonSTDP()
 plotter = Plotters.Common_Plotter()
 
-Mnist.load_mnist()
-images, labels = Mnist.get_mnist_image(label=1, n_samples=20, down_sample=2, dataset='train')
+Datasets.load_mnist()
+images, labels = Datasets.get_mnist_image(label=1, n_samples=20, down_sample=2, dataset='train')
 
 N = []
 S = []

@@ -5,7 +5,8 @@ import os
 import glob
 import Brian2_Framework.Tools as tools
 import seaborn as sns
-
+import matplotlib.animation as animation
+import random
 class Common_Plotter:
     """
     シミュレーション後のネットワークの記録したデータのプロットを行う。
@@ -38,47 +39,111 @@ class Common_Plotter:
         """
         self.simu_time = simu_time
         
-    def raster_plot(self, spikemon, all_rows, this_row, fig_title=""):
+    def raster_plot(self, spikemons, fig_title=""):
         """
         与えられたスパイクモニターからラスタプロットを描画します。
+        リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
+        表示する際には後ろにplt.show()が必要です。
+
+        Args:
+            spikemons (list of SpikeMonitor): スパイクモニターのリスト
+            fig_title (str): フィグのタイトル
+        """
+        plt.figure()
+        all_rows = len(spikemons)
+        if self.simu_time is None:
+            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
+        for this_row in range(all_rows):
+            plt.subplot(all_rows, 1, this_row+1)
+            plt.plot(spikemons[this_row].t/ms, spikemons[this_row].i, '.k', markersize=1)
+            plt.xlabel('Time (ms)')
+            plt.xlim(0, self.simu_time*1000)
+            plt.ylim(0, len(spikemons[this_row].source))
+            plt.ylabel('Neuron index')
+        plt.title(fig_title)
+
+    def state_plot(self, statemon, neuron_num, variable_names, fig_title=""):
+        """
+        与えられたステートモニターからプロットを描画します。この関数実行後にplt.show()などを記述する必要があります。
+        変数のリストを渡すと，すべての変数のプロットを同時に描画します。
+        
+        Args:
+            statemon (StateMonitor): ステートモニター
+            neuron_num (int): プロットするニューロンの番号
+            variable_names (list): プロットする変数の名前
+            fig_title (str): フィグのタイトル
+        """
+        plt.figure()
+        plt.title(fig_title)
+        all_rows = len(variable_names)
+        if self.simu_time is None:
+            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
+        for this_row in range(all_rows):
+            plt.subplot(all_rows, 1, this_row+1)
+            plt.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color="k")
+            if this_row != all_rows-1:
+                plt.xticks([])
+            plt.ylabel(variable_names[this_row])
+            plt.xlim(0, self.simu_time*1000)
+        
+    def raster_plot_time_window(self, spikemon, all_rows, this_row, time_window_size:int, fig_title=""):
+        """
+        与えられたスパイクモニターからリアルタイムでラスタプロットを描画します。
+        使用するには、メインループ内にplt.show(block=False)とplt.pause(0.1)の記述が必要です。
 
         Args:
             spikemon (SpikeMonitor): スパイクモニター
             all_rows (int): 縦に並べるラスタープロットの数
             this_row (int): このプロットを設置する行
-            fig_title (str): フィグのタイトル
+            time_window_size (int): 時間窓のサイズ(ms)
         """
-        if self.simu_time is None:
-            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
-        plt.subplot(all_rows, 1, this_row)
-        plt.plot(spikemon.t/ms, spikemon.i, '.k', markersize=1)
-        plt.xlabel('Time (ms)')
-        plt.xlim(0, self.simu_time*1000)
-        plt.ylim(0, len(spikemon.source))
-        plt.ylabel('Neuron index')
-        plt.title(fig_title)
+        fig, ax = plt.subplots(all_rows, 1)
+        xlim = [0, time_window_size]
+        X, Y = [], []
+        def update(frame):
+            # global X, Y
+            print(len(spikemon.i))
+            Y.append(random.random())
+            X.append(len(Y))
+            # if len(spikemon.i) > 0: 
+            #     # Y.append(spikemon.i[-1])?
+            #     X.append(len(Y))
+            # else:
+            #     X.append(0)
+            #     Y.append(0)
+            
+            if len(X) > time_window_size:
+                xlim[0] += 1
+                xlim[1] += 1
+                
+            ax.clear()
+            line, = ax.plot(X, Y)
+            ax.set_title(fig_title)
+            ax.set_ylim(0, len(spikemon.source))
+            ax.set_xlim(xlim[0], xlim[1])
+            
+            return [line]
+            
+        ani = animation.FuncAnimation(fig, update, interval=10, blit=True)
         
-    def state_plot(self, statemon, neuron_num, variable_name, all_rows, this_row, fig_title=""):
+        
+        
+        
+    def weight_plot_1_neuron(self, synapse, neuron_idx, n_pre, n_post):
         """
-        与えられたステートモニターからプロットを描画します。
-        
+        与えられたシナプスグループから、指定されたニューロンの重みのマップを描画します。
+
         Args:
-            statemon (StateMonitor): ステートモニター
-            neuron_num (int): プロットするニューロンの番号
-            variable_name (str): プロットする変数の名前
-            all_rows (int): 縦に並べるラスタープロットの数
-            this_row (int): このプロットを設置する行
-            fig_title (str): フィグのタイトル
+            synapse (SynapseGroup): シナプスグループ
+            neuron_idx (int): ニューロンのインデックス
         """
-        if self.simu_time is None:
-            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
-        plt.subplot(all_rows, 1, this_row)
-        plt.plot(statemon.t/ms, getattr(statemon, variable_name)[neuron_num], color="k")
-        if this_row != all_rows:
-            plt.xticks([])
-        plt.ylabel(variable_name)
-        plt.xlim(0, self.simu_time*1000)
-        plt.title(fig_title)
+        weight_mat = np.zeros((n_pre, n_post))
+        for i, j, w in zip(synapse.i, synapse.j, synapse.w):
+            weight_mat[i, j] = w
+        
+        weight_mat_plot = weight_mat[:, neuron_idx].reshape(int(np.sqrt(n_pre)), int(np.sqrt(n_pre)))
+        plt.imshow(weight_mat_plot, cmap="viridis")
+
                 
     def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0, assigned_labels=None):
         """
@@ -141,6 +206,7 @@ class Common_Plotter:
                     print(f"\tDeleted {f}")
             plt.savefig(save_path + f"{n_this_fig}.png")
             
+            plt.clf()
             plt.close()   
             
     def firing_rate_heatmap(self, spikemon, start_time, end_time, save_fig=False, save_path=None, n_this_fig=None):
@@ -177,6 +243,7 @@ class Common_Plotter:
         else:
             plt.show()
         
+        plt.clf()
         plt.close()
 class Plotter:
     """

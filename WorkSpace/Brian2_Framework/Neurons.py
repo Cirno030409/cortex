@@ -63,23 +63,7 @@ class Conductance_LIF:
     
     def __init__(self, params=None):
         if params is None:
-            # パラメータ未指定時のデフォルトのパラメータ
-            print("[WARNING] No parameters were specified for STDP synapse. Using default parameters as below.")
-            self.params = {
-                "I_noise"       : 0,        # 定常入力電流
-                "tauge"         : 1*ms,     # 興奮性ニューロンのコンダクタンスの時定数
-                "taugi"         : 2*ms,     # 抑制性ニューロンのコンダクタンスの時定数
-                "taum"          : 10*ms,    # 膜電位の時定数
-                "tautheta"      : 1e7*ms,   # ホメオスタシスの発火閾値の上昇値の減衰時定数
-                "v_rev_e"       : 0,        # 興奮性ニューロンの平衡膜電位
-                "v_rev_i"       : -100,     # 抑制性ニューロンの平衡膜電位
-                "theta_dt"      : 0,        # ホメオスタシスの発火閾値の上昇値
-                "refractory"    : 2 * ms,   # 不応期
-                "v_reset"       : -60,      # リセット電位
-                "v_rest"        : -50,      # 静止膜電位
-                "v_th"          : -40       # 発火閾値
-            }
-            pp.pprint(self.params)
+            raise ValueError("ニューロンを作成する際、パラメータを必ず指定する必要があります。")
         else:
             self.params = params
         self.model = """

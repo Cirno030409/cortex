@@ -19,7 +19,7 @@ class STDP:
         self.on_pre = """
             apre = Apre
             w = clip(w - apost * nu_post * sw, 0, wmax)
-            ge_post += w
+            ge_post += w * g_gain
         """
 
         self.on_post = """
@@ -27,21 +27,7 @@ class STDP:
             w = clip(w + apre * nu_pre * sw, 0, wmax)
         """
         if params is None:
-            # パラメータ未指定時のデフォルトのパラメータ
-            print("[WARNING] No parameters were specified for STDP synapse. Using default parameters as below.")
-            self.params = {
-                "wmax": 1,  # 最大重み
-                "wmin": 0,  # 最小重み
-                "Apre": 1,  # 前ニューロンのスパイクトレースのリセット値
-                "Apost": 1,  # 後ニューロンのスパイクトレースのリセット値
-                "taupre": 20 * ms,  # 前ニューロンのスパイクトレースの時定数
-                "taupost": 20 * ms,  # 後ニューロンのスパイクトレースの時定数
-                "nu_pre": 1,  # 前ニューロン発火時のスパイクトレースの関与率
-                "nu_post": 1,  # 後ニューロン発火時のスパイクトレースの関与率
-                "alpha": 0.01,  # スパイクトレースの収束地点
-                "sw": 1,  # 学習の有無の切り替え
-            }
-            pp.pprint(self.params)
+            raise ValueError("シナプス作成時にパラメータを指定してください。")
         else:
             self.params = params
 

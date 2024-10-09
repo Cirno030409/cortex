@@ -31,10 +31,20 @@ def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
 def make_gif(fps=20, inp_dir="", out_dir="", out_name="output.gif"):
     """
     画像をGIFに変換する
+    
+    Args:
+        fps (int): フレームレート
+        inp_dir (str): 入力ディレクトリ
+        out_dir (str): 出力ディレクトリ
+        out_name (str): 出力ファイル名
     """
 
-    # 指定されたディレクトリから画像ファイルを取得
-    image_files = sorted(glob.glob(os.path.join(inp_dir, "*.png")), key=lambda x: os.path.getmtime(x))
+    all_files = os.listdir(inp_dir)
+    pattern = re.compile(r'^[0-9]+\.png$')
+    image_files = [file for file in all_files if pattern.match(file)]
+    image_files = [os.path.join(inp_dir, file) for file in image_files]
+    print(image_files)
+    image_files = sorted(image_files, key=lambda x: int(os.path.basename(x).split('.')[0]))
     if not image_files:
         print("指定されたディレクトリに画像ファイルが見つかりません。")
         return
@@ -162,10 +172,11 @@ def change_dir_name(dir_path, add_name):
     Returns:
         None
     """
+    time.sleep(1)
     # 完了したのでディレクトリ名を変更
     new_save_path = dir_path[:-1] + add_name
-    print("dir_path: ", dir_path)
-    print("new_save_path: ", new_save_path)
+    # print("dir_path: ", dir_path)
+    # print("new_save_path: ", new_save_path)
     if not os.path.exists(new_save_path):
         os.makedirs(new_save_path)
     for filename in os.listdir(dir_path):
@@ -228,7 +239,7 @@ def reset_network(network):
     synapses = [obj for obj in network.objects if isinstance(obj, Synapses)]
     
     for i in range(len(neurons)):
-        neurons[i].v = -65
+        neurons[i].v = -60
         
     for i in range(len(synapses)):
         synapses[i].ge = 0
@@ -274,6 +285,22 @@ def save_parameters(file_path:str, parameters:dict):
     """
     with open(file_path + "parameters.json", "w") as f:
         json.dump(parameters, f, indent=4, default=convert_quantity)
+        
+def memo_assigned_labels(save_path, assigned_labels):
+    """
+    ニューロンに割り当てられたラベルを読みやす形でテキストファイルに保存します。
+    """
+    with open(save_path + "assigned_labels.txt", "w") as f:
+        f.write("[Assigned labels]\n")
+        for i in range(len(assigned_labels)):
+            f.write(f"\tneuron {i}: {assigned_labels[i]}\n")
+            
+def save_assigned_labels(save_path, assigned_labels):
+    """
+    ニューロンに割り当てられたラベルをValidate時に使用するためにpklファイルに保存します。
+    """
+    with open(save_path + "assigned_labels.pkl", "wb") as f:
+        pkl.dump(assigned_labels, f)
 
 
 

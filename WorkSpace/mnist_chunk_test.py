@@ -10,7 +10,7 @@ import numpy as np
 from brian2 import *
 from tqdm import tqdm
 
-import Brian2_Framework.Mnist as Mnist
+import Brian2_Framework.Datasets as Datasets
 import Brian2_Framework.Plotters as Plotters
 import Brian2_Framework.Tools as tools
 from Brian2_Framework.Networks import *
@@ -20,11 +20,8 @@ from Brian2_Framework.Synapses import *
 seed = 2
 np.random.seed(seed)
 
-params = tools.load_params("Brian2_Framework/parameters/Chunk_WTA.json")
-
-# 読み込み用
-WEIGHT_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/weights.b2"
-ASSIGNED_LABELS_PATH = "examined_data/2024_09_04_11_23_11_めっちゃいい感じ!!_comp/assigned_labels.pkl"
+PARAMS_PATH = "Brian2_Framework/parameters/Chunk_WTA/Chunk_WTA_learn.json"
+params = tools.load_parameters(PARAMS_PATH)
 
 #! Parameters for recording
 test_comment = "チャンクWTAテスト" #! Comment for the experiment
@@ -42,34 +39,31 @@ tools.save_parameters(SAVE_PATH, params)
 
 plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
 # ネットワークを作成
-model = Chunk_WTA(PLOT,
-                  params["n_inp"], 
-                  params["n_e"], 
-                  params["n_i"], 
-                  params["max_rate"], 
-                  params["neuron_params_1e"], 
-                  params["neuron_params_1i"], 
-                  params["neuron_params_2e"], 
-                  params["neuron_params_2i"], 
-                  params["static_synapse_params_1ei"], 
-                  params["static_synapse_params_1ie"], 
-                  params["static_synapse_params_2ei"], 
-                  params["static_synapse_params_2ie"], 
-                  params["stdp_synapse_params_1"], 
-                  params["stdp_synapse_params_2"])
+model = Chunk_WTA(PLOT, PARAMS_PATH)
 
 #! Run simulation =====================================================================
 print("[PROCESS] Running simulation...")
 print(f"[INFO] Examination comment: {test_comment}")
 for j in tqdm(range(params["epoch"]), desc="Epoch progress", dynamic_ncols=True): # エポック数繰り返す
-    images, labels = Mnist.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得
+    images, labels = Datasets.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得
     chunks = []
     for i in range(params["n_samples"]):
-        chunks.extend(Mnist.divide_image_into_chunks(images[i], params["chunk_size"]))
+        chunks.extend(Datasets.divide_image_into_chunks(images[i], params["chunk_size"]))
     try:
         for i in tqdm(range(len(chunks)), desc="Simulation progress", dynamic_ncols=True): # 画像枚数繰り返す
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
                 if i % RECORD_INTERVAL == 0:
+                    if i != 0:
+                        plotter.firing_rate_heatmap(model.network["spikemon_1_exc"], 
+                                                    params["exposure_time"]*(i-RECORD_INTERVAL), 
+                                                    params["exposure_time"]*i, 
+                                                    save_fig=True, save_path=SAVE_PATH, 
+                                                    n_this_fig=str(i+(j*len(chunks)))+"_1")
+                        plotter.firing_rate_heatmap(model.network["spikemon_2_exc"], 
+                                                    params["exposure_time"]*(i-RECORD_INTERVAL), 
+                                                    params["exposure_time"]*i, 
+                                                    save_fig=True, save_path=SAVE_PATH, 
+                                                    n_this_fig=str(i+(j*len(chunks)))+"_2")
                     plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=str(i+(j*len(chunks)))+"_S0")
                     plotter.weight_plot(model.network["S_1_2"], n_pre=params["n_e"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=str(i+(j*len(chunks)))+"_S12")
             tools.normalize_weight(model.network["S_0"], params["n_inp"]//10, params["n_inp"], params["n_e"]) # 重みの正規化
@@ -81,19 +75,11 @@ for j in tqdm(range(params["epoch"]), desc="Epoch progress", dynamic_ncols=True)
         print("[INFO] Simulation interrupted by user.")
 #! =====================================================================================
 print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_1"], params["n_e"], 10, labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
-print(f"[INFO] Assigned labels: ")
-for i in range(len(assigned_labels)):
-    print(f"\tneuron {i}: {assigned_labels[i]}")
-with open(SAVE_PATH + "parameters.json", "a") as f:
-    f.write(f"\nassigned_labels: {assigned_labels}")
-with open(SAVE_PATH + "assigned_labels.pkl", "wb") as f:
-    pkl.dump(assigned_labels, f)
-    print(f"[INFO] Saved assigned labels to {SAVE_PATH + 'assigned_labels.pkl'}")
+assigned_labels = tools.assign_labels2neurons(model.network["spikemon_2_exc"], params["n_e"], 10, labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
+tools.memo_assigned_labels(SAVE_PATH, assigned_labels) # メモ
+tools.save_assigned_labels(SAVE_PATH, assigned_labels) # 保存
 weights = model.network["S_0"].w
 np.save(SAVE_PATH + "weights.npy", weights) # 重みを保存(numpy)
-store(filename=SAVE_PATH + "weights.b2") # 重みを保存(Brian2)
-print(f"[INFO] Saved weights to {SAVE_PATH + 'weights.b2'}")
 # GIFを保存
 if SAVE_WEIGHT_CHANGE_GIF:
     print("[PROCESS] Saving weight change GIF...")
@@ -106,32 +92,11 @@ plt.savefig(SAVE_PATH + "weight_plot_S0.png")
 if PLOT:
     plotter.set_simu_time(model.network.t)
     print("[PROCESS] Plotting results...")
-    for i in range(3):
-        plt.figure()
-        plotter.raster_plot(model.network[f"spikemon_{i}"], 1, 1, fig_title=f"Raster plot of N{i}")
-        plt.savefig(SAVE_PATH + f"raster_plot_N{i}.png")
-
-    plt.figure()
-    plotter.state_plot(model.network["statemon_1"], 0, "v", 5, 1, fig_title="State plot of N1")
-    plotter.state_plot(model.network["statemon_1"], 0, "Ie", 5, 2)
-    plotter.state_plot(model.network["statemon_1"], 0, "Ii", 5, 3)
-    plotter.state_plot(model.network["statemon_1"], 0, "ge", 5, 4)
-    plotter.state_plot(model.network["statemon_1"], 0, "gi", 5, 5)
-    plt.savefig(SAVE_PATH + "state_plot_N1.png")
-
-    plt.figure()
-    plotter.state_plot(model.network["statemon_2"], 0, "v", 5, 1, fig_title="State plot of N2")
-    plotter.state_plot(model.network["statemon_2"], 0, "Ie", 5, 2)
-    plotter.state_plot(model.network["statemon_2"], 0, "Ii", 5, 3)
-    plotter.state_plot(model.network["statemon_2"], 0, "ge", 5, 4)
-    plotter.state_plot(model.network["statemon_2"], 0, "gi", 5, 5)
-    plt.savefig(SAVE_PATH + "state_plot_N2.png")
-
-    plt.figure()
-    plotter.state_plot(model.network["statemon_S"], 0, "w", 3, 1, fig_title="State plot of S0")
-    plotter.state_plot(model.network["statemon_S"], 0, "apre", 3, 2)
-    plotter.state_plot(model.network["statemon_S"], 0, "apost", 3, 3)
-    plt.savefig(SAVE_PATH + "state_plot_S0.png")
+    plotter.raster_plot([model.network["spikemon_input"], model.network["spikemon_1_exc"], model.network["spikemon_2_exc"]], fig_title="Raster plot of N_input, N1_exc, N2_exc")
+    plt.savefig(SAVE_PATH + f"raster_plot_N_input_N1_exc_N2_exc.png")
+    
+    plotter.state_plot(model.network["statemon_N_1_exc"], 0, ["v", "Ie", "Ii", "ge", "gi"], fig_title=f"State plot of N1_exc")
+    plt.savefig(SAVE_PATH + f"state_plot_N1_exc.png")
 
 print("[PROCESS] Done.")
 
