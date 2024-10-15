@@ -1,5 +1,5 @@
 {
-    "n_samples": 50,
+    "n_samples": 100,
     "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,

@@ -39,7 +39,7 @@ class Common_Plotter:
         """
         self.simu_time = simu_time
         
-    def raster_plot(self, spikemons, fig_title=""):
+    def raster_plot(self, spikemons, fig_title="", time_start:int=0, time_end:int=None):
         """
         与えられたスパイクモニターからラスタプロットを描画します。
         リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
@@ -48,43 +48,54 @@ class Common_Plotter:
         Args:
             spikemons (list of SpikeMonitor): スパイクモニターのリスト
             fig_title (str): フィグのタイトル
+            time_start (int): プロットする時間の開始範囲(ms)
+            time_end (int): プロットする時間の終了範囲(ms)
         """
+        if time_end is None:
+            time_end = self.simu_time*1000
         plt.figure()
+        plt.suptitle(fig_title)
         all_rows = len(spikemons)
         if self.simu_time is None:
             raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
         for this_row in range(all_rows):
             plt.subplot(all_rows, 1, this_row+1)
             plt.plot(spikemons[this_row].t/ms, spikemons[this_row].i, '.k', markersize=1)
-            plt.xlabel('Time (ms)')
-            plt.xlim(0, self.simu_time*1000)
+            if this_row+1 == all_rows:
+                plt.xlabel('Time (ms)')
+            plt.xlim(time_start, time_end)
             plt.ylim(0, len(spikemons[this_row].source))
             plt.ylabel('Neuron index')
-        plt.title(fig_title)
+        plt.subplots_adjust(hspace=0.7)
 
-    def state_plot(self, statemon, neuron_num, variable_names, fig_title=""):
+    def state_plot(self, statemon, neuron_num, variable_names, fig_title="", time_start:int=0, time_end:int=None):
         """
         与えられたステートモニターからプロットを描画します。この関数実行後にplt.show()などを記述する必要があります。
-        変数のリストを渡すと，すべての変数のプロットを同時に描画します。
+        変数のリストを渡すと，すべての変数のプロットを縦に並べて同時に描画します。
         
         Args:
             statemon (StateMonitor): ステートモニター
             neuron_num (int): プロットするニューロンの番号
             variable_names (list): プロットする変数の名前
             fig_title (str): フィグのタイトル
+            time_start (int): プロットする時間の開始範囲(ms)
+            time_end (int): プロットする時間の終了範囲(ms)
         """
+        if time_end is None:
+            time_end = self.simu_time*1000
         plt.figure()
-        plt.title(fig_title)
+        plt.suptitle(fig_title)
         all_rows = len(variable_names)
         if self.simu_time is None:
-            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
+            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用して全体のシミュレーション時間を設定してください。")
         for this_row in range(all_rows):
             plt.subplot(all_rows, 1, this_row+1)
             plt.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color="k")
-            if this_row != all_rows-1:
-                plt.xticks([])
+            if this_row+1 == all_rows:
+                plt.xlabel('Time (ms)')
+            plt.xlim(time_start, time_end)
             plt.ylabel(variable_names[this_row])
-            plt.xlim(0, self.simu_time*1000)
+        plt.subplots_adjust(hspace=0.7)
         
     def raster_plot_time_window(self, spikemon, all_rows, this_row, time_window_size:int, fig_title=""):
         """

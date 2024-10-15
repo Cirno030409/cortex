@@ -14,7 +14,9 @@ import pprint as pp
 import matplotlib.pyplot as plt
 import os
 class Validator():
-    
+    """
+    既存のネットワークを使ってAccuracyを計算するためのクラス
+    """
     def __init__(self, weight_path:str, assigned_labels_path:str, network_type:str, params_json_path:str):
         """
         ネットワークでAccuracyを計算するValidatorを作成します。
