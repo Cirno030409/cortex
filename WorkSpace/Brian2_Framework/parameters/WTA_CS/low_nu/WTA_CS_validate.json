@@ -8,6 +8,7 @@
     "max_rate": 60,
     "spontaneous_rate": 0,
     "network_type": "WTA_CS",
+    "record_interval": 100,
     "neuron_params_e": {
         "I_noise": 0,
         "tauge": "1*ms",
@@ -44,8 +45,8 @@
         "Apost": 1,
         "taupre": "20*ms",
         "taupost": "20*ms",
-        "nu_pre": 0.01,
-        "nu_post": 0.0001,
+        "nu_pre": 0.001,
+        "nu_post": 0.00001,
         "alpha": 0,
         "sw": 1,
         "g_gain": 1

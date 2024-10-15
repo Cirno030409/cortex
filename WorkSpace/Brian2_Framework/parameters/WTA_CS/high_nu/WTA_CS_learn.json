@@ -8,6 +8,7 @@
     "max_rate": 60,
     "spontaneous_rate": 0,
     "network_type": "WTA_CS",
+    "record_interval": 25,
     "neuron_params_e": {
         "I_noise": 0,
         "tauge": "1*ms",

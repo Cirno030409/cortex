@@ -20,16 +20,15 @@ from Brian2_Framework.Validator import Validator
 
 
 seed = 2
-PARAMS_PATH = "Brian2_Framework/parameters/WTA_CS/WTA_CS_learn.json"
+PARAMS_PATH = "Brian2_Framework/parameters/WTA_CS/low_nu/WTA_CS_learn.json"
 params = tools.load_parameters(PARAMS_PATH) # パラメータを読み込み
 
 # ===================================== 記録用パラメータ ==========================================
-test_comment = "Center-Surround抑制を行うk=2" #! 実験用コメント
+test_comment = "Center-Surround抑制を行うk=2low_nu" #! 実験用コメント
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
-PLOT = True # プロットするか
+PLOT = False # プロットするか
 VALIDATION = False # Accuracyを計算するか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
-RECORD_INTERVAL = 50 # 記録する間隔
 SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
 
 os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
@@ -50,11 +49,11 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
     try:
         for i in tqdm(range(params["n_samples"]), desc="simulating", dynamic_ncols=True): # 画像枚数繰り返す
             if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
-                if i % RECORD_INTERVAL == 0:
+                if i % params["record_interval"] == 0:
                     
                     if i != 0:
                         plotter.firing_rate_heatmap(model.network["spikemon_for_assign"], 
-                                                    params["exposure_time"]*(i-RECORD_INTERVAL), 
+                                                    params["exposure_time"]*(i-params["record_interval"]), 
                                                     params["exposure_time"]*i, 
                                                     save_fig=True, save_path=SAVE_PATH, 
                                                     n_this_fig=i+(j*params["n_samples"]))
@@ -67,7 +66,6 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
         print("[INFO] Simulation interrupted by user.")
 
 # ===================================== ラベルの割り当て ==========================================
-print("[PROCESS] Assigning labels to neurons...")
 assigned_labels = tools.assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], 10, all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
 tools.memo_assigned_labels(SAVE_PATH, assigned_labels) # メモ
 tools.save_assigned_labels(SAVE_PATH, assigned_labels) # 保存
@@ -75,7 +73,6 @@ print(f"[INFO] Saved assigned labels to {SAVE_PATH + 'assigned_labels.pkl'}")
 weights = model.network["S_0"].w
 np.save(SAVE_PATH + "weights.npy", weights) # 重みを保存(numpy)
 if SAVE_WEIGHT_CHANGE_GIF:
-    print("[PROCESS] Saving weight change GIF...")
     tools.make_gif(25, SAVE_PATH, SAVE_PATH, "weight_change.gif") # GIFを保存
     
 plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], title="weight plot of S0", save_fig=True, save_path=SAVE_PATH, n_this_fig="final_weight_plot", assigned_labels=assigned_labels)

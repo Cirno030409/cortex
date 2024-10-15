@@ -6,8 +6,37 @@ from brian2 import *
 import Brian2_Framework.Tools as tools
 
 
+class Network_Frame:
+    """
+    ネットワークのクラス
+    
+    Methods:
+        enable_learning(): 学習を有効にします。\n
+        disable_learning(): 学習を無効にします。\n
+        change_image(image:np.ndarray, spontaneous_rate:int=0): 入力画像を変更します。
+    """
+    def enable_learning(self):
+        """
+        学習を有効にします。
+        """
+        self.obj["S_0"].namespace["sw"] = 1
+        
+    def disable_learning(self):
+        """
+        学習を無効にします。
+        """
+        self.obj["S_0"].namespace["sw"] = 0
+        
+    def change_image(self, image:np.ndarray, spontaneous_rate:int=0):
+        """
+        入力画像を変更します。
 
-class Diehl_and_Cook_WTA:
+        Args:
+            image (np.ndarray): 入力画像\n
+            spontaneous_rate (int, optional): 自発発火率. Defaults to 0.
+        """
+        self.neuron_inp.change_image(image, spontaneous_rate)
+class Diehl_and_Cook_WTA(Network_Frame):
     """
     Diehl and CookのWTAネットワークを作成します。
     
@@ -55,28 +84,6 @@ class Diehl_and_Cook_WTA:
         self.obj["spikemon_for_assign"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_for_assign") # ラベル割当に必要
 
         self.network = Network(self.obj.values()) # ネットワークを作成
-
-    def enable_learning(self):
-        """
-        学習を有効にします。
-        """
-        self.obj["S_0"].namespace["sw"] = 1
-        
-    def disable_learning(self):
-        """
-        学習を無効にします。
-        """
-        self.obj["S_0"].namespace["sw"] = 0
-        
-    def change_image(self, image:np.ndarray, spontaneous_rate:int=0):
-        """
-        入力画像を変更します。
-
-        Args:
-            image (np.ndarray): 入力画像\n
-            spontaneous_rate (int, optional): 自発発火率. Defaults to 0.
-        """
-        self.neuron_inp.change_image(image, spontaneous_rate)
         
 class Chunk_WTA:
     """
@@ -156,7 +163,7 @@ class Chunk_WTA:
         """
         self.neuron_inp.change_image(image, spontaneous_rate)
 
-class Center_Surround_WTA:
+class Center_Surround_WTA(Network_Frame):
     """
     抑制をCenter-Surroundで行うWTAネットワーク。
     """
@@ -193,28 +200,45 @@ class Center_Surround_WTA:
         self.obj["spikemon_for_assign"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_for_assign") # ラベル割当に必要
 
         self.network = Network(self.obj.values()) # ネットワークを作成
-
-    def enable_learning(self):
-        """
-        学習を有効にします。
-        """
-        self.obj["S_0"].namespace["sw"] = 1
         
-    def disable_learning(self):
-        """
-        学習を無効にします。
-        """
-        self.obj["S_0"].namespace["sw"] = 0
+class Mini_Column(Network_Frame):
+    """
+    一つのミニカラムのネットワーク
+    WTA like ネットワーク
+    """
+    def __init__(self, enable_monitor:bool, params_json_path:str):
+        # ニューロンとシナプスのインスタンスを作成
+        params = tools.load_parameters(params_json_path)
+        params = tools.load_parameters(params_json_path)
+        neuron_e = Conductance_LIF(params["neuron_params_e"])
+        neuron_i = Conductance_LIF(params["neuron_params_i"])
+        self.neuron_inp = Poisson_Input()
+        synapse_ei = NonSTDP(params["static_synapse_params_ei"])
+        synapse_ie = NonSTDP(params["static_synapse_params_ie"])
+        synapse_stdp = STDP(params["stdp_synapse_params"])
         
-    def change_image(self, image:np.ndarray, spontaneous_rate:int=0):
-        """
-        入力画像を変更します。
+        self.obj = {} # ネットワークのオブジェクトを格納する辞書
 
-        Args:
-            image (np.ndarray): 入力画像\n
-            spontaneous_rate (int, optional): 自発発火率. Defaults to 0.
-        """
-        self.neuron_inp.change_image(image, spontaneous_rate)
+        # Create network
+        self.obj["N_0"] = self.neuron_inp(params["n_inp"], max_rate=params["max_rate"], name="N_0")
+        self.obj["N_1"] = neuron_e(params["n_e"], name="N_1")
+        self.obj["N_2"] = neuron_i(params["n_i"], name="N_2")
+
+        self.obj["S_0"] = synapse_stdp(self.obj["N_0"], self.obj["N_1"], name="S_0", connect=True) # 入力層から興奮ニューロン
+        self.obj["S_1"] = synapse_ei(self.obj["N_1"], self.obj["N_2"], "exc", name="S_1", delay=0*ms, connect="i==j") # 興奮ニューロンから抑制ニューロン
+        self.obj["S_2"] = synapse_ie(self.obj["N_2"], self.obj["N_1"], "inh", name="S_2", delay=0*ms, connect="i!=j") # 側抑制
+        
+        # Create monitors
+        if enable_monitor:
+            self.obj["spikemon_0"] = SpikeMonitor(self.obj["N_0"], record=True, name="spikemon_0")
+            self.obj["spikemon_1"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_1")
+            self.obj["spikemon_2"] = SpikeMonitor(self.obj["N_2"], record=True, name="spikemon_2")
+            self.obj["statemon_1"] = StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_1")
+            self.obj["statemon_2"] = StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_2")
+            self.obj["statemon_S"] = StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=0, name="statemon_S")
+        self.obj["spikemon_for_assign"] = SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_for_assign") # ラベル割当に必要
+
+        self.network = Network(self.obj.values()) # ネットワークを作成
 
 
 
