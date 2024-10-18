@@ -3,7 +3,7 @@
 """
 from brian2 import *
 import Brian2_Framework.Datasets as mnist
-from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA
+from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA, Center_Surround_WTA
 import Brian2_Framework.Tools as tools
 from brian2.units import *
 import numpy as np
@@ -33,6 +33,8 @@ class Validator():
             self.model = Diehl_and_Cook_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
         elif network_type == "Chunk_WTA":
             self.model = Chunk_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
+        elif network_type == "WTA_CS":
+            self.model = Center_Surround_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
         else:
             raise ValueError("Invalid network type")
         with open(weight_path, "rb") as f: # 重みを読み込む
@@ -92,7 +94,7 @@ class Validator():
             wronged_image_idx (list): 予測が間違えた画像のインデックスのリスト
         """
         image, self.labels = mnist.get_mnist_sample(n_samples=n_samples, dataset='test') # テストデータを取得
-        print("[PROCESS] Validation started.")
+        print("[PROCESS] Validating...")
         for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
             self.model.change_image(image[i])
             self.model.network.run(self.params["exposure_time"])

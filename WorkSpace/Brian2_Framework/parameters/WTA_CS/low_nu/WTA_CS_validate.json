@@ -1,5 +1,5 @@
 {
-    "n_samples":2000,
+    "n_samples":10000,
     "epoch": 1,
     "exposure_time": "350*ms",
     "n_inp": 784,
@@ -45,8 +45,8 @@
         "Apost": 1,
         "taupre": "20*ms",
         "taupost": "20*ms",
-        "nu_pre": 0.001,
-        "nu_post": 0.00001,
+        "nu_pre": 0.005,
+        "nu_post": 0.00005,
         "alpha": 0,
         "sw": 1,
         "g_gain": 1

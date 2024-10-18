@@ -18,12 +18,11 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Synapses import *
 from Brian2_Framework.Validator import Validator
 
-
 seed = 2
 
-# ===================================== パラメータ ==========================================
-test_comment = "Plotツールを使いやすく変更" #! 実験用コメント
-PARAMS_PATH = "Brian2_Framework/parameters/WTA/WTA_learn.json" #! 使用するパラメータ
+# ===================================== 記録用パラメータ ==========================================
+test_comment = "単体minicolumnテスト" #! 実験用コメント
+PARAMS_PATH = "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json" #! 使用するパラメータ
 PLOT = True # プロットするか
 VALIDATION = False # Accuracyを計算するか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
@@ -35,9 +34,10 @@ SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレク�
 os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
 print(f"[INFO] Created directory: {SAVE_PATH}")
 tools.save_parameters(SAVE_PATH, params) # パラメータをメモる
-
 plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
-model = Diehl_and_Cook_WTA(PLOT, params_json_path=PARAMS_PATH) # ネットワークを作成
+model = Mini_Columns_Network.Mini_Column(PLOT, params_json_path=PARAMS_PATH) # ネットワークを作成
+neuron_inp = Poisson_Input(params["n_inp"], max_rate=params["max_rate"], name="N_0") # 入力層
+model.set_input_neurons(neuron_inp)
 
 #! ===================================== シミュレーション ==========================================
 print("[PROCESS] Running simulation...")
@@ -59,8 +59,8 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
                     plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*params["n_samples"]))
             tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
             model.change_image(images[i], params["spontaneous_rate"]) # 入力画像の変更
-            model.network.run(params["exposure_time"])
-            tools.reset_network(model.network)
+            model.network.run(params["exposure_time"]) # シミュレーション実行
+            tools.reset_network(model.network) # ネットワークをリセット
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 
@@ -80,40 +80,17 @@ plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["
 
 # ===================================== シミュレーション結果のプロット ==========================================
 if PLOT:
-    plotter.set_simu_time(model.network.t)
+    plotter.set_simu_time(model.network.t) # シミュレーション時間を設定
     print("[PROCESS] Plotting results...")
-    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=300, fig_title="Raster plot of N0, N1, N2")
+    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=500, fig_title="Raster plot of N0, N1, N2")
     plt.savefig(SAVE_PATH + "raster_plot_N0_N1_N2.png")
 
-    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300, fig_title="State plot of N1")
+    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=500, fig_title="State plot of N1")
     plt.savefig(SAVE_PATH + "state_plot_N1.png")
     plt.show()
 
 time.sleep(1)
 SAVE_PATH = tools.change_dir_name(SAVE_PATH, "_comp/") # 完了したのでディレクトリ名を変更
 
-# ===================================== 精度の計算 ==========================================
-if VALIDATION:
-    validator = Validator(
-                        weight_path=f"{SAVE_PATH}/weights.npy", 
-                        assigned_labels_path=f"{SAVE_PATH}/assigned_labels.pkl", 
-                        params_json_path=PARAMS_PATH,
-                        network_type="WTA")
-    acc, predict_labels, answer_labels, wronged_image_idx = validator.validate(n_samples=params["n_samples"])
-    print(f"Accuracy: {acc}")
-    print(f"Wrongly predicted images: {wronged_image_idx}")
-    
-    # 結果を記録
-    with open(f"{SAVE_PATH}/result.txt", "w") as f:
-        f.write(f"Accuracy: {acc*100}%\n")
-        f.write("\n[Answer labels -> Predict labels]\n")
-        for i in range(len(answer_labels)):
-            f.write(f"Image {i}: {answer_labels[i]} -> {predict_labels[i]}\n")
-        f.write("\n[Wrongly predicted images]\n")
-        f.write("Wrong Image idx: Answer labels -> Predict labels\n")
-        for idx in wronged_image_idx:
-            f.write(f"Image {idx}: {answer_labels[idx]} -> {predict_labels[idx]}\n")
-            
-    tools.change_dir_name(SAVE_PATH, f"_validated_acc={acc*100:.2f}%")
 
 

@@ -20,20 +20,19 @@ from Brian2_Framework.Validator import Validator
 
 
 seed = 2
-PARAMS_PATH = "Brian2_Framework/parameters/WTA_CS/low_nu/WTA_CS_learn.json"
-params = tools.load_parameters(PARAMS_PATH) # パラメータを読み込み
 
 # ===================================== 記録用パラメータ ==========================================
-test_comment = "Center-Surround抑制を行うk=2low_nu" #! 実験用コメント
-name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
+test_comment = "Center-Surround抑制を行うk=1nu=0.0005epoch=2" #! 実験用コメント
+PARAMS_PATH = "Brian2_Framework/parameters/WTA_CS/low_nu/WTA_CS_learn.json"
 PLOT = False # プロットするか
-VALIDATION = False # Accuracyを計算するか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
-SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
+# ===================================================================================================
 
+params = tools.load_parameters(PARAMS_PATH) # パラメータを読み込み
+name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
+SAVE_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
 os.makedirs(SAVE_PATH) # 保存用ディレクトリを作成
 print(f"[INFO] Created directory: {SAVE_PATH}")
-
 tools.save_parameters(SAVE_PATH, params) # パラメータをメモる
 
 plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
@@ -90,29 +89,4 @@ if PLOT:
 
 time.sleep(1)
 SAVE_PATH = tools.change_dir_name(SAVE_PATH, "_comp/") # 完了したのでディレクトリ名を変更
-
-# ===================================== 精度の計算 ==========================================
-if VALIDATION:
-    validator = Validator(
-                        weight_path=f"{SAVE_PATH}/weights.npy", 
-                        assigned_labels_path=f"{SAVE_PATH}/assigned_labels.pkl", 
-                        params_json_path=PARAMS_PATH,
-                        network_type="WTA")
-    acc, predict_labels, answer_labels, wronged_image_idx = validator.validate(n_samples=params["n_samples"])
-    print(f"Accuracy: {acc}")
-    print(f"Wrongly predicted images: {wronged_image_idx}")
-    
-    # 結果を記録
-    with open(f"{SAVE_PATH}/result.txt", "w") as f:
-        f.write(f"Accuracy: {acc*100}%\n")
-        f.write("\n[Answer labels -> Predict labels]\n")
-        for i in range(len(answer_labels)):
-            f.write(f"Image {i}: {answer_labels[i]} -> {predict_labels[i]}\n")
-        f.write("\n[Wrongly predicted images]\n")
-        f.write("Wrong Image idx: Answer labels -> Predict labels\n")
-        for idx in wronged_image_idx:
-            f.write(f"Image {idx}: {answer_labels[idx]} -> {predict_labels[idx]}\n")
-            
-    tools.change_dir_name(SAVE_PATH, f"_validated_acc={acc*100:.2f}%")
-
 

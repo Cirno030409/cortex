@@ -1,14 +1,23 @@
 from brian2 import Synapses
+from brian2 import NeuronGroup
 from brian2.units import *
 import pprint as pp
 
 
-class STDP:
+class STDP_Synapse(Synapses):
     """
     STDPシナプスを作成します。
     """
 
-    def __init__(self, params=None):
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, *args, **kwargs):
+        """
+        pre_neurons: 前ニューロン
+        post_neurons: 後ニューロン
+        name: シナプスの名前
+        connect: シナプスの接続方法
+        params: パラメータの辞書
+        *args, **kwargs: その他の引数
+        """
 
         self.model = """
             dapre/dt = (-apre - alpha)/taupre : 1 (event-driven)
@@ -27,67 +36,48 @@ class STDP:
             w = clip(w + apre * nu_pre * sw, 0, wmax)
         """
         if params is None:
-            raise ValueError("シナプス作成時にパラメータを指定してください。")
+            raise ValueError("シナプス作成時にパラメータの辞書を渡してください。")
         else:
             self.params = params
-
-    def __call__(
-        self, pre_neurons, post_neurons, name:str, connect=True
-    ):
-
         
-        synapse = Synapses(
-            source=pre_neurons,
-            target=post_neurons,
-            model=self.model,
-            on_pre=self.on_pre,
-            on_post=self.on_post,
-            name=name,
-            namespace=self.params,
-            method="euler"
-        )
-        synapse.connect(connect)
-        synapse.w = "rand() * (wmax - wmin) + wmin"
-        return synapse
+        super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, on_post=self.on_post, namespace=self.params, name=name, *args, **kwargs)
+        self.connect(connect)
+        self.w = "rand() * (wmax - wmin) + wmin"
 
+class Normal_Synapse(Synapses):
 
-class NonSTDP:
     """
     非STDPシナプスを作成します。
     """
 
-    def __init__(self, params=None):
-
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, exc_or_inh:str, name:str, connect=True, params=None, *args, **kwargs):
+        """
+        学習を行わない非STDPシナプスを作成します。
+        
+        Args:
+        pre_neurons: 前ニューロン
+        post_neurons: 後ニューロン
+        exc_or_inh: 興奮性シナプスか抑制性シナプスか
+        name: シナプスの名前
+        connect: シナプスの接続方法
+        params: パラメータの辞書
+        *args, **kwargs: その他の引数
+        """
         self.model = "w : 1"
 
-        self.on_pre_e = "ge_post += w" # 後ニューロンへの興奮性入力
-        self.on_pre_i = "gi_post += w" # 後ニューロンへの抑制性入力
-
         if params is None:
-            # パラメータ未指定時のデフォルトのパラメータ
-            self.params = {
-                "w": 1,  # 固定重み
-            }
+            raise ValueError("シナプス作成時にパラメータの辞書を渡してください。")
         else:
             self.params = params
 
-    def __call__(self, pre_neurons, post_neurons, exc_or_inh:str, name:str, delay=1*ms, connect=True):
         if exc_or_inh == "exc":
-            on_pre = self.on_pre_e
+            self.on_pre = "ge_post += w" # 後ニューロンへの興奮性入力
         elif exc_or_inh == "inh":
-            on_pre = self.on_pre_i
+            self.on_pre = "gi_post += w" # 後ニューロンへの抑制性入力
         else:
-            raise ValueError("exc_or_inh must be 'exc' or 'inh'")
+            raise ValueError("通常のシナプスを作成するときは，'exc'か'inh'を指定してください。")
+
         
-        synapse = Synapses(
-            source=pre_neurons,
-            target=post_neurons,
-            model=self.model,
-            on_pre=on_pre,
-            method="euler",
-            name=name,
-            delay=delay
-        )
-        synapse.connect(connect)
-        synapse.w = self.params["w"]
-        return synapse
+        super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, method="euler", name=name, *args, **kwargs)
+        self.connect(connect)
+        self.w = self.params["w"]

@@ -43,7 +43,6 @@ def make_gif(fps=20, inp_dir="", out_dir="", out_name="output.gif"):
     pattern = re.compile(r'^[0-9]+\.png$')
     image_files = [file for file in all_files if pattern.match(file)]
     image_files = [os.path.join(inp_dir, file) for file in image_files]
-    print(image_files)
     image_files = sorted(image_files, key=lambda x: int(os.path.basename(x).split('.')[0]))
     if not image_files:
         print("指定されたディレクトリに画像ファイルが見つかりません。")

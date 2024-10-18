@@ -5,14 +5,14 @@ from Brian2_Framework.Validator import Validator
 import Brian2_Framework.Tools as tools
 import json
 import numpy as np
-OBJECT_DIR = "examined_data/2024_09_07_19_50_59_重みをnpyで保存_comp/" # 重みを保存したディレクトリ
 
-seed = 3
+OBJECT_DIR = "examined_data/2024_10_17_13_26_32_Center-Surround抑制を行うk=2nu=0.0005_comp/" # 重みを保存したディレクトリ
+PARAMS_PATH = "Brian2_Framework/parameters/WTA_CS/low_nu/WTA_CS_validate.json"
+
+seed = 2
 np.random.seed(seed)
-
-PARAMS_PATH = "Brian2_Framework/parameters/WTA/WTA_validate.json"
 params = tools.load_parameters(PARAMS_PATH)
-#! Neuron & Synapse Parameters
+# ===================================== Validationの実行 ==========================================
 with open(os.path.join(OBJECT_DIR, "parameters_validate.json"), "w") as f:
     json.dump(params, f, indent=4, default=tools.convert_quantity)
 validator = Validator(
@@ -26,7 +26,7 @@ print(f"Wrongly predicted images: {wronged_image_idx}")
 
 tools.save_parameters(OBJECT_DIR + "parameters_validate.json", params)
 
-# 結果を記録
+# ===================================== 結果を記録 ==========================================
 with open(f"{OBJECT_DIR}/results/result.txt", "w") as f:
     f.write(f"Accuracy: {acc*100}%\n")
     f.write("\n[Answer labels -> Predict labels]\n")
