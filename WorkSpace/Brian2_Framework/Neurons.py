@@ -44,7 +44,7 @@ class Conductance_Izhikevich2003(NeuronGroup):
         self.ge = 0
         self.gi = 0
     
-class Conductance_LIF(NeuronGroup):
+class Conductance_LIF_Neuron(NeuronGroup):
     
     def __init__(self, N, params=None, *args, **kwargs):
         if params is None:
@@ -78,7 +78,7 @@ class Conductance_LIF(NeuronGroup):
             print(f"{key}: {value}")
 
         
-class Poisson_Input(PoissonGroup):
+class Poisson_Input_Neuron(PoissonGroup):
     def __init__(self, N, max_rate:float, *args, **kwargs):
         self.max_rate = max_rate
         self.rates = np.zeros(N)

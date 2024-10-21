@@ -1,7 +1,7 @@
 {
     "n_samples": 50,
-    "epoch": 1,
-    "exposure_time": "150*ms",
+    "epoch": 2,
+    "exposure_time": "350*ms",
     "n_inp": 784,
     "n_e": 100,
     "n_i": 100,

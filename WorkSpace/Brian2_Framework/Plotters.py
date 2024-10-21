@@ -39,7 +39,7 @@ class Common_Plotter:
         """
         self.simu_time = simu_time
         
-    def raster_plot(self, spikemons, fig_title="", time_start:int=0, time_end:int=None):
+    def raster_plot(self, spikemons, fig_title="", time_start:int=0, time_end:int=None, save_path:str=None):
         """
         与えられたスパイクモニターからラスタプロットを描画します。
         リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
@@ -67,8 +67,10 @@ class Common_Plotter:
             plt.ylim(0, len(spikemons[this_row].source))
             plt.ylabel('Neuron index')
         plt.subplots_adjust(hspace=0.7)
+        if save_path is not None:
+            plt.savefig(save_path)
 
-    def state_plot(self, statemon, neuron_num, variable_names, fig_title="", time_start:int=0, time_end:int=None):
+    def state_plot(self, statemon, neuron_num, variable_names, fig_title="", time_start:int=0, time_end:int=None, save_path:str=None):
         """
         与えられたステートモニターからプロットを描画します。この関数実行後にplt.show()などを記述する必要があります。
         変数のリストを渡すと，すべての変数のプロットを縦に並べて同時に描画します。
@@ -96,8 +98,11 @@ class Common_Plotter:
             plt.xlim(time_start, time_end)
             plt.ylabel(variable_names[this_row])
         plt.subplots_adjust(hspace=0.7)
+        if save_path is not None:
+            plt.savefig(save_path)
         
     def raster_plot_time_window(self, spikemon, all_rows, this_row, time_window_size:int, fig_title=""):
+        # TODO 実装途中
         """
         与えられたスパイクモニターからリアルタイムでラスタプロットを描画します。
         使用するには、メインループ内にplt.show(block=False)とplt.pause(0.1)の記述が必要です。
@@ -156,7 +161,7 @@ class Common_Plotter:
         plt.imshow(weight_mat_plot, cmap="viridis")
 
                 
-    def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path="", n_this_fig=0, assigned_labels=None):
+    def weight_plot(self, synapse, n_pre, n_post, title="", save_fig=False, save_path:str=None, n_this_fig=0, assigned_labels=None):
         """
         与えられたステートモニターから重みのプロットを描画します。
 
@@ -208,7 +213,7 @@ class Common_Plotter:
         plt.tight_layout(rect=[0, 0, 0.9, 1])  # 右側に10%の空白を確保
         warnings.filterwarnings("default", category=UserWarning) # カラーバーの警告を有効化
         
-        if save_fig:
+        if save_path is not None:
             if n_this_fig == 0:
                 # save_path内の全ファイルを削除
                 files = glob.glob(os.path.join(save_path, '*.png'))
@@ -220,7 +225,7 @@ class Common_Plotter:
             plt.clf()
             plt.close()   
             
-    def firing_rate_heatmap(self, spikemon, start_time, end_time, save_fig=False, save_path=None, n_this_fig=None):
+    def firing_rate_heatmap(self, spikemon, start_time, end_time, save_fig=False, save_path:str=None, n_this_fig=None):
         """
         与えられたスパイクモニターから発火率のヒートマップを描画します。
 
@@ -249,7 +254,7 @@ class Common_Plotter:
         plt.xlabel('Neuron Index')
         plt.ylabel('Neuron Index')
         
-        if save_fig:
+        if save_path is not None:
             plt.savefig(f'{save_path}{n_this_fig}_rate_heatmap.png', dpi=300, bbox_inches='tight')
         else:
             plt.show()

@@ -1,24 +1,23 @@
 {
-    "n_samples":100,
+    "n_samples": 50,
     "epoch": 1,
-    "exposure_time": "350*ms",
+    "exposure_time": "150*ms",
     "n_inp": 784,
-    "n_e": 100,
-    "n_i": 100,
+    "n_mini_column": 2,
     "max_rate": 60,
     "spontaneous_rate": 0,
-    "network_type": "WTA_CS",
-    "record_interval": 100,
+    "record_interval": 50,
+    "network_type": "WTA",
+    "mini_column_params_json_path": "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json",
     "neuron_params_e": {
         "I_noise": 0,
         "tauge": "1*ms",
         "taugi": "2*ms",
         "taum": "100*ms",
-        "theta_dt": 0,
+        "theta_dt": 0.08,
         "tautheta": "1e7*ms",
         "v_rev_e": 0,
         "v_rev_i": -100,
-        
         "refractory": "2*ms",
         "v_reset": -60,
         "v_rest": -50,
@@ -45,8 +44,8 @@
         "Apost": 1,
         "taupre": "20*ms",
         "taupost": "20*ms",
-        "nu_pre": 0.005,
-        "nu_post": 0.00005,
+        "nu_pre": 0.01,
+        "nu_post": 0.0001,
         "alpha": 0,
         "sw": 1,
         "g_gain": 1
@@ -55,7 +54,6 @@
         "w": 30
     },
     "static_synapse_params_ie": {
-        "w": 22,
-        "k": 1
+        "w": 22
     }
 }

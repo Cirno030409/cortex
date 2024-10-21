@@ -21,8 +21,9 @@ from Brian2_Framework.Validator import Validator
 seed = 2
 np.random.seed(seed)
 # ===================================== 記録用パラメータ ==========================================
-test_comment = "単体minicolumnテスト" #! 実験用コメント
-PARAMS_PATH = "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json" #! 使用するパラメータ
+test_comment = "Cortexテスト" #! 実験用コメント
+PARAMS_PATH = "Brian2_Framework/parameters/Cortex/Cortex_learn.json" #! 使用するパラメータ
+PARAMS_VALIDATE_PATH = "Brian2_Framework/parameters/Cortex/Cortex_validate.json" #! 使用する検証用パラメータ
 PLOT = True # プロットするか
 VALIDATION = False # Accuracyを計算するか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
@@ -35,10 +36,8 @@ os.makedirs(os.path.join(TARGET_PATH, "LEARNING", "learning weight matrix"), exi
 SAVE_PATH = TARGET_PATH
 tools.save_parameters(os.path.join(SAVE_PATH, "parameters.json"), params) # パラメータをメモる
 
-plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
-model = Mini_Column(PLOT, params_json_path=PARAMS_PATH) # ネットワークを作成
-neuron_inp = Poisson_Input_Neuron(params["n_inp"], max_rate=params["max_rate"], name="N_0") # 入力層
-model.set_input_neurons(neuron_inp)
+plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成
+model = Cortex(PLOT, params_json_path=PARAMS_PATH) # ネットワークを作成
 
 #! ===================================== シミュレーション ==========================================
 print("[PROCESS] Running simulation...")
@@ -49,16 +48,7 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
     all_labels.extend(labels)
     try:
         for i in tqdm(range(params["n_samples"]), desc="simulating", dynamic_ncols=True): # 画像枚数繰り返す
-            if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
-                if i % params["record_interval"] == 0:
-                    if i != 0:
-                        plotter.firing_rate_heatmap(model.network["spikemon_for_assign"], 
-                                                    params["exposure_time"]*(i-params["record_interval"]), 
-                                                    params["exposure_time"]*i, 
-                                                    save_fig=True, save_path=os.path.join(SAVE_PATH, "LEARNING", "learning weight matrix"), 
-                                                    n_this_fig=i+(j*params["n_samples"]))
-                    plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=os.path.join(SAVE_PATH, "LEARNING", "learning weight matrix"), n_this_fig=i+(j*params["n_samples"]))
-            tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
+            # tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
             model.change_image(images[i], params["spontaneous_rate"]) # 入力画像の変更
             model.network.run(params["exposure_time"]) # シミュレーション実行
             tools.reset_network(model.network) # ネットワークをリセット
@@ -66,28 +56,13 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
         print("[INFO] Simulation interrupted by user.")
 
 # ===================================== ラベルの割り当て ==========================================
-print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], 10, all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
-tools.memo_assigned_labels(SAVE_PATH, assigned_labels) # メモ
-tools.save_assigned_labels(SAVE_PATH, assigned_labels) # 保存
-print(f"[INFO] Saved assigned labels to {SAVE_PATH + 'assigned_labels.pkl'}")
-weights = model.network["S_0"].w
-np.save(SAVE_PATH + "weights.npy", weights) # 重みを保存(numpy)
-if SAVE_WEIGHT_CHANGE_GIF:
-    print("[PROCESS] Saving weight change GIF...")
-    tools.make_gif(25, SAVE_PATH + "LEARNING/learning weight matrix/", SAVE_PATH, "weight_change.gif") # GIFを保存
-    
-plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], title="weight plot of S0", save_fig=True, save_path=SAVE_PATH, n_this_fig="final_weight_plot", assigned_labels=assigned_labels)
 
 # ===================================== シミュレーション結果のプロット ==========================================
 if PLOT:
-    plotter.set_simu_time(model.network.t)
+    plotter.set_simu_time(model.network.t) # シミュレーション時間を設定
     print("[PROCESS] Plotting results...")
-    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=300, fig_title="Raster plot of N0, N1, N2")
-    plt.savefig(SAVE_PATH + "LEARNING/raster_plot_N0_N1_N2.png")
+    plotter.raster_plot([model.network["mc0_spikemon_N_inp"], model.network["mc0_spikemon_N_1"], model.network["mc1_spikemon_N_1"]], time_end=500, fig_title="Raster plot", save_path=SAVE_PATH + "LEARNING/Raster plot.png")
 
-    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300, fig_title="State plot of N1")
-    plt.savefig(SAVE_PATH + "LEARNING/state_plot_N1.png")
     plt.show()
 
 time.sleep(1)

@@ -272,17 +272,17 @@ def load_parameters(file_path:str):
                 loaded_data[key_name] = float(value) * eval(unit)
     return loaded_data
 
-def save_parameters(file_path:str, parameters:dict):
+def save_parameters(dir_path:str, parameters:dict):
     """
     JSONファイルにパラメータを保存します。Brian2の単位変換も行います。
 
     Args:
-        file_path (str): JSONファイルのパス
+        dir_path (str): ディレクトリのパス
         parameters (dict): パラメータの辞書
     Returns:
         None
     """
-    with open(file_path + "parameters.json", "w") as f:
+    with open(dir_path + "parameters.json", "w") as f:
         json.dump(parameters, f, indent=4, default=convert_quantity)
         
 def memo_assigned_labels(save_path, assigned_labels):
