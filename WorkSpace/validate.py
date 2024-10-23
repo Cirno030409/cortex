@@ -5,8 +5,8 @@ from Brian2_Framework.Validator import Validator
 import Brian2_Framework.Tools as tools
 import json
 import numpy as np
-
-OBJECT_DIR = "examined_data/" + "2024_09_07_19_50_59_重みをnpyで保存_homesta_comp" + "/" # 重みを保存したディレクトリ
+OBJECT_DIR = "saved_network/" + "2024_09_07_19_50_59_重みをnpyで保存_homesta_comp" + "/"
+# OBJECT_DIR = "examined_data/" + "2024_10_21_16_50_48_検証用WTA350ms_comp" + "/" # 重みを保存したディレクトリ
 PARAMS_PATH = "Brian2_Framework/parameters/WTA/WTA_validate.json"
 
 seed = 2

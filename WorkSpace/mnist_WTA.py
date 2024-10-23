@@ -19,11 +19,11 @@ from Brian2_Framework.Synapses import *
 from Brian2_Framework.Validator import Validator
 
 
-seed = 2
+seed = 3
 np.random.seed(seed)
 
 # ===================================== パラメータ ==========================================
-test_comment = "test" #! 実験用コメント
+test_comment = "検証用WTA150ms seed3" #! 実験用コメント
 PARAMS_PATH = "Brian2_Framework/parameters/WTA/WTA_learn.json" #! 使用するパラメータ
 PARAMS_VALIDATE_PATH = "Brian2_Framework/parameters/WTA/WTA_validate.json" #! 使用する検証用パラメータ
 PLOT = False # プロットするか
@@ -43,7 +43,7 @@ model = Diehl_and_Cook_WTA(PLOT, params_json_path=PARAMS_PATH) # ネットワー
 
 #! ===================================== シミュレーション ==========================================
 print("[PROCESS] Running simulation...")
-print(f"[INFO] Examination comment: {test_comment}")
+print(f"[INFO] Examination comment: {name_test}")
 all_labels = [] # 全Epochで入力された全ラベル
 for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True): # エポック数繰り返す
     images, labels = Datasets.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得

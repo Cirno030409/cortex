@@ -9,7 +9,7 @@ class STDP_Synapse(Synapses):
     STDPシナプスを作成します。
     """
 
-    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, *args, **kwargs):
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="exc", *args, **kwargs):
         """
         pre_neurons: 前ニューロン
         post_neurons: 後ニューロン
@@ -25,11 +25,20 @@ class STDP_Synapse(Synapses):
             w : 1
         """
 
-        self.on_pre = """
-            apre = Apre
-            w = clip(w - apost * nu_post * sw, 0, wmax)
-            ge_post += w * g_gain
-        """
+        if exc_or_inh == "exc":
+            self.on_pre = """
+                apre = Apre
+                w = clip(w - apost * nu_post * sw, 0, wmax)
+                ge_post += w * g_gain
+            """
+        elif exc_or_inh == "inh":
+            self.on_pre = """
+                apre = Apre
+                w = clip(w - apost * nu_post * sw, 0, wmax)
+                gi_post += w * g_gain
+            """
+        else:
+            raise ValueError("STDPシナプスを作成するときは，'exc'か'inh'を指定してください。")
 
         self.on_post = """
             apost = Apost
@@ -50,7 +59,7 @@ class Normal_Synapse(Synapses):
     非STDPシナプスを作成します。
     """
 
-    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, exc_or_inh:str, name:str, connect=True, params=None, *args, **kwargs):
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="", *args, **kwargs):
         """
         学習を行わない非STDPシナプスを作成します。
         

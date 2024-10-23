@@ -39,11 +39,12 @@ class Common_Plotter:
         """
         self.simu_time = simu_time
         
-    def raster_plot(self, spikemons, fig_title="", time_start:int=0, time_end:int=None, save_path:str=None):
+    def raster_plot(self, spikemons:list, time_start:int=0, time_end:int=None, save_path:str=None):
         """
         与えられたスパイクモニターからラスタプロットを描画します。
         リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
         表示する際には後ろにplt.show()が必要です。
+        グラフを保存するには，保存するパスを渡します。
 
         Args:
             spikemons (list of SpikeMonitor): スパイクモニターのリスト
@@ -53,8 +54,8 @@ class Common_Plotter:
         """
         if time_end is None:
             time_end = self.simu_time*1000
-        plt.figure()
-        plt.suptitle(fig_title)
+        plt.figure(figsize=(15, 2*len(spikemons)))
+        plt.suptitle("Raster plot")
         all_rows = len(spikemons)
         if self.simu_time is None:
             raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
@@ -66,14 +67,16 @@ class Common_Plotter:
             plt.xlim(time_start, time_end)
             plt.ylim(0, len(spikemons[this_row].source))
             plt.ylabel('Neuron index')
+            plt.title(spikemons[this_row].name)
         plt.subplots_adjust(hspace=0.7)
         if save_path is not None:
             plt.savefig(save_path)
 
-    def state_plot(self, statemon, neuron_num, variable_names, fig_title="", time_start:int=0, time_end:int=None, save_path:str=None):
+    def state_plot(self, statemon:StateMonitor, neuron_num:int, variable_names:list, time_start:int=0, time_end:int=None, save_path:str=None):
         """
         与えられたステートモニターからプロットを描画します。この関数実行後にplt.show()などを記述する必要があります。
         変数のリストを渡すと，すべての変数のプロットを縦に並べて同時に描画します。
+        グラフを保存するには，保存するパスを渡します。
         
         Args:
             statemon (StateMonitor): ステートモニター
@@ -85,14 +88,20 @@ class Common_Plotter:
         """
         if time_end is None:
             time_end = self.simu_time*1000
-        plt.figure()
-        plt.suptitle(fig_title)
+        plt.figure(figsize=(15, 2*len(variable_names)))
+        plt.suptitle(f"State plot - {statemon.name}")
         all_rows = len(variable_names)
         if self.simu_time is None:
             raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用して全体のシミュレーション時間を設定してください。")
         for this_row in range(all_rows):
             plt.subplot(all_rows, 1, this_row+1)
-            plt.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color="k")
+            if variable_names[this_row] == "ge":
+                color = "r"
+            elif variable_names[this_row] == "gi":
+                color = "b"
+            else:
+                color = "k"
+            plt.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color=color)
             if this_row+1 == all_rows:
                 plt.xlabel('Time (ms)')
             plt.xlim(time_start, time_end)
@@ -101,7 +110,7 @@ class Common_Plotter:
         if save_path is not None:
             plt.savefig(save_path)
         
-    def raster_plot_time_window(self, spikemon, all_rows, this_row, time_window_size:int, fig_title=""):
+    def raster_plot_time_window(self, spikemon:SpikeMonitor, all_rows:int, this_row:int, time_window_size:int, fig_title:str=""):
         # TODO 実装途中
         """
         与えられたスパイクモニターからリアルタイムでラスタプロットを描画します。
@@ -240,16 +249,19 @@ class Common_Plotter:
 
         firing_rates = tools.get_firing_rate(spikemon, start_time, end_time)
         n_neurons = len(firing_rates)
-        side_length = int(np.ceil(np.sqrt(n_neurons)))
         
-        heatmap_data = np.zeros((side_length, side_length))
+        # 最適な行数と列数を計算
+        n_rows = int(np.ceil(np.sqrt(n_neurons)))
+        n_cols = int(np.ceil(n_neurons / n_rows))
+        
+        heatmap_data = np.full((n_rows, n_cols), np.nan)
         for i in range(n_neurons):
-            row = i // side_length
-            col = i % side_length
+            row = i // n_cols
+            col = i % n_cols
             heatmap_data[row, col] = firing_rates[i]
         
         plt.figure(figsize=(12, 10))
-        sns.heatmap(heatmap_data, cmap='viridis', annot=True, fmt='.2f', cbar=True)
+        sns.heatmap(heatmap_data, cmap='viridis', annot=True, fmt='.2f', cbar=True, mask=np.isnan(heatmap_data), vmin=0)
         plt.title(f'Firing Rate Heatmap ({start_time} to {end_time})')
         plt.xlabel('Neuron Index')
         plt.ylabel('Neuron Index')

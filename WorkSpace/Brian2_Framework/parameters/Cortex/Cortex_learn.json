@@ -1,14 +1,14 @@
 {
-    "n_samples": 50,
+    "n_samples": 200,
     "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
-    "n_mini_column": 2,
+    "n_mini_column": 4,
     "max_rate": 60,
     "spontaneous_rate": 0,
     "record_interval": 50,
     "network_type": "WTA",
-    "mini_column_params_json_path": "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json",
+    "mini_column_params_path": "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json",
     "neuron_params_e": {
         "I_noise": 0,
         "tauge": "1*ms",

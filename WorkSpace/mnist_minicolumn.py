@@ -42,7 +42,7 @@ model.set_input_neurons(neuron_inp)
 
 #! ===================================== シミュレーション ==========================================
 print("[PROCESS] Running simulation...")
-print(f"[INFO] Examination comment: {test_comment}")
+print(f"[INFO] Examination comment: {name_test}")
 all_labels = [] # 全Epochで入力された全ラベル
 for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True): # エポック数繰り返す
     images, labels = Datasets.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得

@@ -19,6 +19,7 @@ class Network_Frame(Network):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.network = Network()
         
     def enable_learning(self):
         """
@@ -60,6 +61,7 @@ class Diehl_and_Cook_WTA(Network_Frame):
     """
     def __init__(self, enable_monitor:bool, params_json_path:str):
         # Make instances of neurons and synapses
+        super().__init__()
         params = tools.load_parameters(params_json_path)
         
         self.obj = {} # ネットワークのオブジェクトを格納する辞書
@@ -70,8 +72,8 @@ class Diehl_and_Cook_WTA(Network_Frame):
         self.obj["N_2"] = Conductance_LIF_Neuron(params["n_i"], params["neuron_params_i"], name="N_2")
 
         self.obj["S_0"] = STDP_Synapse(self.obj["N_inp"], self.obj["N_1"], name="S_0", connect=True, params=params["stdp_synapse_params"]) # 入力層から興奮ニューロン
-        self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], "exc", name="S_1", delay=0*ms, connect="i==j", params=params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
-        self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], "inh", name="S_2", delay=0*ms, connect="i!=j", params=params["static_synapse_params_ie"]) # 側抑制
+        self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], exc_or_inh="exc", name="S_1", delay=0*ms, connect="i==j", params=params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
+        self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], exc_or_inh="inh", name="S_2", delay=0*ms, connect="i!=j", params=params["static_synapse_params_ie"]) # 側抑制
         
         # Create monitors
         if enable_monitor:
@@ -85,7 +87,7 @@ class Diehl_and_Cook_WTA(Network_Frame):
                 )
         self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_for_assign")) # ラベル割当に必要
 
-        self.network = Network(self.obj.values()) # ネットワークを作成
+        self.network.add(self.obj.values())
         
 class Chunk_WTA(Network_Frame):
     """
@@ -115,11 +117,11 @@ class Chunk_WTA(Network_Frame):
 
         ## Synapses
         self.obj["S_0"] = STDP_Synapse(self.obj["N_inp"], self.obj["N_1_exc"], name="S_0", connect=True, params=params["stdp_synapse_params_1"]) # 入力層から興奮ニューロン
-        self.obj["S_1_ei"] = Normal_Synapse(self.obj["N_1_exc"], self.obj["N_1_inh"], "exc", name="S_1_ei", connect="i==j", params=params["static_synapse_params_1ei"]) # 興奮ニューロンから抑制ニューロン
-        self.obj["S_1_ie"] = Normal_Synapse(self.obj["N_1_inh"], self.obj["N_1_exc"], "inh", name="S_1_ie", connect="i!=j", params=params["static_synapse_params_1ie"]) # 側抑制
+        self.obj["S_1_ei"] = Normal_Synapse(self.obj["N_1_exc"], self.obj["N_1_inh"], exc_or_inh="exc", name="S_1_ei", connect="i==j", params=params["static_synapse_params_1ei"]) # 興奮ニューロンから抑制ニューロン
+        self.obj["S_1_ie"] = Normal_Synapse(self.obj["N_1_inh"], self.obj["N_1_exc"], exc_or_inh="inh", name="S_1_ie", connect="i!=j", params=params["static_synapse_params_1ie"]) # 側抑制
         self.obj["S_1_2"] = STDP_Synapse(self.obj["N_1_exc"], self.obj["N_2_exc"], name="S_1_2", connect="i==j", params=params["stdp_synapse_params_2"]) # １層から２層目の接続
-        self.obj["S_2_ei"] = Normal_Synapse(self.obj["N_2_exc"], self.obj["N_2_inh"], "exc", name="S_2_ei", connect="i==j", params=params["static_synapse_params_2ei"]) # 興奮ニューロンから抑制ニューロン
-        self.obj["S_2_ie"] = Normal_Synapse(self.obj["N_2_inh"], self.obj["N_2_exc"], "inh", name="S_2_ie", connect="i!=j", params=params["static_synapse_params_2ie"]) # 側抑制
+        self.obj["S_2_ei"] = Normal_Synapse(self.obj["N_2_exc"], self.obj["N_2_inh"], exc_or_inh="exc", name="S_2_ei", connect="i==j", params=params["static_synapse_params_2ei"]) # 興奮ニューロンから抑制ニューロン
+        self.obj["S_2_ie"] = Normal_Synapse(self.obj["N_2_inh"], self.obj["N_2_exc"], exc_or_inh="inh", name="S_2_ie", connect="i!=j", params=params["static_synapse_params_2ie"]) # 側抑制
         
         # Create monitors
         if enable_monitor:
@@ -184,9 +186,9 @@ class Mini_Column(Network_Frame):
     """
 
     def __init__(self, enable_monitor:bool, params_json_path:str, column_id:int):
+        super().__init__()
         self.column_id = column_id
         self.enable_monitor = enable_monitor
-        self.network = Network()
         self.params = tools.load_parameters(params_json_path) # パラメータを読み込む
         
         self.obj = {} # ネットワークのオブジェクトを格納する辞書
@@ -195,45 +197,53 @@ class Mini_Column(Network_Frame):
         self.obj["N_1"] = Conductance_LIF_Neuron(self.params["n_e"], self.params["neuron_params_e"], name=f"mc{column_id}_N_1")
         self.obj["N_2"] = Conductance_LIF_Neuron(self.params["n_i"], self.params["neuron_params_i"], name=f"mc{column_id}_N_2")
 
-        self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], "exc", name=f"mc{column_id}_S_1", connect="i==j", params=self.params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
+        # 興奮性結合
+        # self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], exc_or_inh="exc", name=f"mc{column_id}_S_1", connect="i==j", params=self.params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
 
-        self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], "inh", name=f"mc{column_id}_S_2", connect="i!=j", params=self.params["static_synapse_params_ie"]) # 側抑制
+        # 抑制性結合
+        self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], exc_or_inh="inh", name=f"mc{column_id}_S_2", connect=f"i!=j", params=self.params["static_synapse_params_ie"]) # 側抑制
+        # self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], exc_or_inh="inh", name=f"mc{column_id}_S_2", connect=f"i-j <= {self.params['k']}", params=self.params["static_synapse_params_ie"]) # 隣を抑制
+        # self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], exc_or_inh="inh", name=f"mc{column_id}_S_2", connect=f"i-j >= 25", params=self.params["static_synapse_params_ie"]) # Center-Surround抑制
+        
         
         # Create monitors
         if self.enable_monitor:
-            self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_1"),
-                             SpikeMonitor(self.obj["N_2"], record=True, name=f"mc{column_id}_spikemon_2"),
-                             StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_1"),
-                             StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_2"))
+            self.network.add(
+                SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_N_1"),
+                SpikeMonitor(self.obj["N_2"], record=True, name=f"mc{column_id}_spikemon_N_2"),
+                StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
+                StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
+            )
         self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_for_assign")) # ラベル割当に必要
 
-        self.network = Network(self.obj.values()) # ネットワークを作成
+        self.network.add(self.obj.values())
         
     def get_network(self):
         return self.network
         
-    def connect_neurons(self, neuron_group:NeuronGroup, connect_to:str, stdp_or_normal:str, param_name:str, connect:bool=True):
+    def connect_neurons(self, source:NeuronGroup, connect_to:str, stdp_or_normal:str, syn_name:str, param_name:str, exc_or_inh:str="", connect:bool=True):
         """
         渡された入力ニューロンをこのミニカラムの指定されたオブジェクトに接続します。
         シナプスの種類と，結合方法を指定できます。JSONファイルに書かれたシナプスのパラメータ名を指定してください。
         
         Args:
-            neuron_group (NeuronGroup): 入力層に接続するニューロングループ
+            source (NeuronGroup): 入力層に接続するニューロングループ
             connect_to (str): 接続するオブジェクトの名前
             stdp_or_normal (str): シナプスの種類。"stdp"か"normal"
+            exc_or_inh (str): シナプスの興奮性か抑制性か。"exc"か"inh"
             connect (bool): シナプスを接続するかどうか
             param_name (str): シナプスのパラメータの名前
         """
         if stdp_or_normal == "stdp":
-            self.network.add(STDP_Synapse(neuron_group, self.obj["N_1"], name=f"mc{self.column_id}_S_0", connect=connect, params=self.params[param_name])) # 入力層から興奮ニューロン
+            syn = STDP_Synapse(source, self.obj[connect_to], exc_or_inh=exc_or_inh, name=f"mc{self.column_id}_{syn_name}", connect=connect, params=self.params[param_name]) # 入力層から興奮ニューロン
+            if self.enable_monitor:
+                # self.network.add(StateMonitor(syn, ["w", "apre", "apost"], record=0, name=f"mc{self.column_id}_statemon_S"))
+                pass
         else:
-            self.network.add(Normal_Synapse(neuron_group, self.obj["N_1"], name=f"mc{self.column_id}_S_0", connect=connect, params=self.params[param_name])) # 入力層から興奮ニューロン
-        
-        if self.enable_monitor: # モニタを追加
-            self.network.add(SpikeMonitor(neuron_group, record=True, name=f"mc{self.column_id}_spikemon_N_inp"))
-            self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{self.column_id}_spikemon_N_1"))
-        else:
-            self.network.add(self.obj["S_0"], neuron_group)
+            syn = Normal_Synapse(source, self.obj[connect_to], exc_or_inh=exc_or_inh, name=f"mc{self.column_id}_{syn_name}", connect=connect, params=self.params[param_name]) # 入力層から興奮ニューロン
+                    
+        self.network.add(syn)
+
             
 class Cortex(Network_Frame):
     """
@@ -254,11 +264,31 @@ class Cortex(Network_Frame):
         
         self.obj["N_inp"] = Poisson_Input_Neuron(self.params["n_inp"], max_rate=self.params["max_rate"], name="N_inp")
         
-        for i in range(self.params["n_mini_column"]): # ミニカラムを作成
-            mc = Mini_Column(self.enable_monitor, self.params["mini_column_params_json_path"], column_id=i) # ミニカラムを作成
-            mc.connect_neurons(self.obj["N_inp"], connect_to="N_1", stdp_or_normal="stdp", param_name="stdp_synapse_params", connect=True) # 接続
-            self.columns[i] = mc.get_network() # ネットワークを取得
-        self.network = Network(self.obj.values(), self.columns.values()) # ネットワークを作成
+        if self.enable_monitor:
+            self.obj["spikemon_inp"] = SpikeMonitor(self.obj["N_inp"], record=True, name="spikemon_inp")
+        
+        # ミニカラムを作成して入力層と接続
+        for i in range(self.params["n_mini_column"]):
+            self.columns[i] = Mini_Column(self.enable_monitor, self.params["mini_column_params_path"], column_id=i) # ミニカラムを作成
+            self.columns[i].connect_neurons(self.obj["N_inp"], connect_to="N_1", stdp_or_normal="stdp", exc_or_inh="exc", syn_name="S_0", param_name="stdp_synapse_params", connect=True) # 接続
+        
+        
+        # ミニカラム間を結合
+        # self.columns[1].connect_neurons(source=self.columns[0].network["mc0_N_1"], connect_to="N_2", stdp_or_normal="normal", exc_or_inh="exc", syn_name="S_mc", param_name="inter_column_synapse_params_ei", connect=True)
+        # self.columns[0].connect_neurons(source=self.columns[1].network["mc1_N_1"], connect_to="N_2", stdp_or_normal="normal", exc_or_inh="exc", syn_name="S_mc", param_name="inter_column_synapse_params_ei", connect=True)
+        
+        for i in range(self.params["n_mini_column"]):
+            for j in range(self.params["n_mini_column"]):
+                if i != j:
+                    self.columns[i].connect_neurons(source=self.columns[j].network[f"mc{j}_N_1"], connect_to="N_2", stdp_or_normal="normal", exc_or_inh="exc", syn_name=f"S_mc_{i}_{j}", param_name="inter_column_synapse_params_ei", connect=True)
+
+        
+        # ネットワークを作成
+        self.network.add(self.obj.values())
+        for column in self.columns.values():
+            self.network.add(column.get_network())
+        
+        
         
 
 

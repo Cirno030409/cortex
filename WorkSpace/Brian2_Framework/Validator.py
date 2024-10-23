@@ -107,6 +107,8 @@ class Validator():
         # ===================================== ラベルの予測と精度の算出 ===================================
         predict_labels = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=10)
         acc = np.sum(self.labels == predict_labels) / len(self.labels)
+        # labels : 画像のラベル
+        # predict_labels : 予測されたラベル
         print("acc:", acc)
 
 
@@ -161,6 +163,13 @@ class Validator():
             # 発火数の多い上位10個のニューロンのインデックスを取得
             top_10_neurons = np.argsort(spike_counts)[-10:][::-1]
             
+            # 発火数が同じニューロンを昇順に並び替え
+            sorted_neurons = []
+            for count in sorted(set(spike_counts[top_10_neurons]), reverse=True):
+                same_count_neurons = [n for n in top_10_neurons if spike_counts[n] == count]
+                sorted_neurons.extend(sorted(same_count_neurons))
+            top_10_neurons = sorted_neurons[:10]
+            
             # プロットの準備
             fig, axes = plt.subplots(3, 5, figsize=(20, 8))
             fig.suptitle(f"Top 10 Neuron Weights for Incorrect Prediction (Image {idx})\n"
@@ -176,10 +185,10 @@ class Validator():
                 
                 axes[row, col].axis('off')
                 weight = self.model.network["S_0"].w[:, neuron_idx].reshape(28, 28)
-                if spike_counts[neuron_idx] == 0:
-                    continue
+                # if spike_counts[neuron_idx] == 0:
+                #     continue
                 im = axes[row, col].imshow(weight, cmap='viridis')
-                axes[row, col].set_title(f"Neuron {neuron_idx}\nSpikes: {spike_counts[neuron_idx]}")
+                axes[row, col].set_title(f"Neuron {neuron_idx}\nSpikes: {spike_counts[neuron_idx]}\nassigned label: {self.assigned_labels[neuron_idx]}")
                 fig.colorbar(im, ax=axes[row, col], fraction=0.046, pad=0.04)
             plt.tight_layout()
             plt.savefig(f"{self.target_path}/VALIDATING/{validation_name}/top 10 wrong weights against each image/class_{self.labels[idx]}/top_10_weights_image_{idx}.png")

@@ -153,7 +153,7 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
     for i in range(n_neuron):
         max_indices = np.where(spike_cnt[i] == spike_cnt[i].max())[0]
         if max_indices.size > 0:
-            assigned_labels[i] = np.random.choice(max_indices)
+            assigned_labels[i] = max_indices[0] # 複数の最大値があった場合は最初のものを選択
         else:
             print(f"警告: ニューロン {i} のスパイク数が全て0です")
             print(f"NaN の有無: {np.isnan(spike_cnt[i]).any()}")
