@@ -54,23 +54,35 @@ class Common_Plotter:
         """
         if time_end is None:
             time_end = self.simu_time*1000
-        plt.figure(figsize=(15, 2*len(spikemons)))
-        plt.suptitle("Raster plot")
+        fig = plt.figure(figsize=(15, 2*len(spikemons)))
+        plt.suptitle(f"Raster plot")
+        fig.canvas.manager.set_window_title(f"Raster plot - {spikemons[0].name}")
         all_rows = len(spikemons)
-        if self.simu_time is None:
-            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用してシミュレーション時間を設定してください。")
+        if self.simu_time is None and time_end is None:
+            raise ValueError("time_end引数を用いてプロット時間を限定するか，予めset_simu_time()を使用してシミュレーション時間を設定してください。")
+            
+        # サブプロットを作成
+        axes = []
         for this_row in range(all_rows):
-            plt.subplot(all_rows, 1, this_row+1)
-            plt.plot(spikemons[this_row].t/ms, spikemons[this_row].i, '.k', markersize=1)
+            if this_row == 0:
+                ax = plt.subplot(all_rows, 1, this_row+1)
+            else:
+                ax = plt.subplot(all_rows, 1, this_row+1, sharex=axes[0])
+            axes.append(ax)
+            
+            ax.plot(spikemons[this_row].t/ms, spikemons[this_row].i, '.k', markersize=1)
             if this_row+1 == all_rows:
-                plt.xlabel('Time (ms)')
-            plt.xlim(time_start, time_end)
-            plt.ylim(0, len(spikemons[this_row].source))
-            plt.ylabel('Neuron index')
-            plt.title(spikemons[this_row].name)
+                ax.set_xlabel('Time (ms)')
+            ax.set_xlim(time_start, time_end)
+            ax.set_ylim(0, len(spikemons[this_row].source))
+            ax.set_ylabel('Neuron index')
+            ax.set_title(spikemons[this_row].name)
+            
         plt.subplots_adjust(hspace=0.7)
+        plt.tight_layout()
         if save_path is not None:
             plt.savefig(save_path)
+        return fig
 
     def state_plot(self, statemon:StateMonitor, neuron_num:int, variable_names:list, time_start:int=0, time_end:int=None, save_path:str=None):
         """
@@ -88,71 +100,39 @@ class Common_Plotter:
         """
         if time_end is None:
             time_end = self.simu_time*1000
-        plt.figure(figsize=(15, 2*len(variable_names)))
-        plt.suptitle(f"State plot - {statemon.name}")
+        fig = plt.figure(figsize=(14, 1.3*len(variable_names)))
+        plt.suptitle(f"State plot - {statemon.name} - Neuron {neuron_num}")
+        fig.canvas.manager.set_window_title(f"State plot - {statemon.name} - Neuron {neuron_num}")
         all_rows = len(variable_names)
-        if self.simu_time is None:
-            raise ValueError("シミュレーション時間が設定されていません。set_simu_time()を使用して全体のシミュレーション時間を設定してください。")
+        if self.simu_time is None and time_end is None:
+            raise ValueError("time_end引数を用いてプロット時間を限定するか，予めset_simu_time()を使用してシミュレーション時間を設定してください。")
+            
+        # サブプロットを作成
+        axes = []
         for this_row in range(all_rows):
-            plt.subplot(all_rows, 1, this_row+1)
-            if variable_names[this_row] == "ge":
+            if this_row == 0:
+                ax = plt.subplot(all_rows, 1, this_row+1)
+            else:
+                ax = plt.subplot(all_rows, 1, this_row+1, sharex=axes[0])
+            axes.append(ax)
+            
+            if variable_names[this_row] == "ge" or variable_names[this_row] == "Ie":
                 color = "r"
-            elif variable_names[this_row] == "gi":
+            elif variable_names[this_row] == "gi" or variable_names[this_row] == "Ii":
                 color = "b"
             else:
                 color = "k"
-            plt.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color=color)
+            ax.plot(statemon.t/ms, getattr(statemon, variable_names[this_row])[neuron_num], color=color)
             if this_row+1 == all_rows:
-                plt.xlabel('Time (ms)')
-            plt.xlim(time_start, time_end)
-            plt.ylabel(variable_names[this_row])
+                ax.set_xlabel('Time (ms)')
+            ax.set_xlim(time_start, time_end)
+            ax.set_ylabel(variable_names[this_row])
+            
         plt.subplots_adjust(hspace=0.7)
+        plt.tight_layout()
         if save_path is not None:
             plt.savefig(save_path)
-        
-    def raster_plot_time_window(self, spikemon:SpikeMonitor, all_rows:int, this_row:int, time_window_size:int, fig_title:str=""):
-        # TODO 実装途中
-        """
-        与えられたスパイクモニターからリアルタイムでラスタプロットを描画します。
-        使用するには、メインループ内にplt.show(block=False)とplt.pause(0.1)の記述が必要です。
-
-        Args:
-            spikemon (SpikeMonitor): スパイクモニター
-            all_rows (int): 縦に並べるラスタープロットの数
-            this_row (int): このプロットを設置する行
-            time_window_size (int): 時間窓のサイズ(ms)
-        """
-        fig, ax = plt.subplots(all_rows, 1)
-        xlim = [0, time_window_size]
-        X, Y = [], []
-        def update(frame):
-            # global X, Y
-            print(len(spikemon.i))
-            Y.append(random.random())
-            X.append(len(Y))
-            # if len(spikemon.i) > 0: 
-            #     # Y.append(spikemon.i[-1])?
-            #     X.append(len(Y))
-            # else:
-            #     X.append(0)
-            #     Y.append(0)
-            
-            if len(X) > time_window_size:
-                xlim[0] += 1
-                xlim[1] += 1
-                
-            ax.clear()
-            line, = ax.plot(X, Y)
-            ax.set_title(fig_title)
-            ax.set_ylim(0, len(spikemon.source))
-            ax.set_xlim(xlim[0], xlim[1])
-            
-            return [line]
-            
-        ani = animation.FuncAnimation(fig, update, interval=10, blit=True)
-        
-        
-        
+        return fig
         
     def weight_plot_1_neuron(self, synapse, neuron_idx, n_pre, n_post):
         """
@@ -192,7 +172,7 @@ class Common_Plotter:
         n_rows = int(np.ceil(np.sqrt(n_post)))
         n_cols = int(np.ceil(n_post / n_rows))
 
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 9))  # 幅を10に増やして右側に空白を作る
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(13, 12))  # 幅を10に増やして右側に空白を作る
         axes = axes.flatten()  # 2次元配列を1次元に変換
 
         for img in range(n_post):
@@ -204,14 +184,16 @@ class Common_Plotter:
             axes[img].set_yticks([])
             
             if assigned_labels is not None:
-                axes[img].set_xlabel(f"{assigned_labels[img]}", fontsize=8)
+                axes[img].set_xlabel(f"Neuron {img},label:{assigned_labels[img]}", fontsize=6)
+            else:
+                axes[img].set_xlabel(f"Neuron {img}", fontsize=6)
 
         # 余分なサブプロットを非表示にする
         for img in range(n_post, n_rows * n_cols):
             axes[img].axis('off')
 
-        fig.suptitle(title)
-        fig.canvas.manager.set_window_title(title)
+        fig.suptitle(f"Weight plot - {synapse.name}")
+        fig.canvas.manager.set_window_title(f"Weight plot - {synapse.name}")
 
         # 右側にカラーバーを配置
         cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # 右側に空白を作り、そこにカラーバーを配置

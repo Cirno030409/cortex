@@ -1,5 +1,5 @@
 {
-    "n_samples":10000,
+    "n_samples":10,
     "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
@@ -7,6 +7,7 @@
     "n_i": 100,
     "max_rate": 60,
     "spontaneous_rate": 0,
+    "seed":1,
     "network_type": "WTA",
     "neuron_params_e": {
         "I_noise": 0,

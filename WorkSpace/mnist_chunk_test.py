@@ -68,9 +68,9 @@ for j in tqdm(range(params["epoch"]), desc="Epoch progress", dynamic_ncols=True)
                     plotter.weight_plot(model.network["S_1_2"], n_pre=params["n_e"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=str(i+(j*len(chunks)))+"_S12")
             tools.normalize_weight(model.network["S_0"], params["n_inp"]//10, params["n_inp"], params["n_e"]) # 重みの正規化
             tools.normalize_weight(model.network["S_1_2"], params["n_e"]//10, params["n_e"], params["n_e"]) # 重みの正規化
-            model.change_image(chunks[i], params["spontaneous_rate"]) # 入力画像の変更
-            model.network.run(params["exposure_time"])
-            tools.reset_network(model.network)
+            model.set_input_image(chunks[i], params["spontaneous_rate"]) # 入力画像の設定
+            model.run(params["exposure_time"])
+            model.reset()
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 #! =====================================================================================

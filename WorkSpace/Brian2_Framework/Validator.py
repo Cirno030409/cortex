@@ -20,7 +20,7 @@ class Validator():
     """
     既存のネットワークを使ってAccuracyを計算するためのクラス
     """
-    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params_json_path:str):
+    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params_json_path:str, enable_monitor:bool=False):
         """
         ネットワークでAccuracyを計算するValidatorを作成します。
 
@@ -37,12 +37,13 @@ class Validator():
         self.target_path = target_path
         self.weight_path = os.path.join(target_path, "weights.npy")
         self.params = tools.load_parameters(params_json_path)
+        self.network_type = network_type
         if network_type == "WTA":
-            self.model = Diehl_and_Cook_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Diehl_and_Cook_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
         elif network_type == "Chunk_WTA":
-            self.model = Chunk_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Chunk_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
         elif network_type == "WTA_CS":
-            self.model = Center_Surround_WTA(enable_monitor=False, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Center_Surround_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
         else:
             raise ValueError("Validation用のネットワークの種類を正しくしてください。:", network_type)
         
@@ -83,7 +84,7 @@ class Validator():
         
         return predicted_labels
     
-    def validate(self, n_samples:int):
+    def validate(self, n_samples:int, examination_name:str=None):
         """
         検証用のネットワークを実行してAccuracyを計算します。
         
@@ -100,20 +101,26 @@ class Validator():
         # ===================================== ネットワークの実行 ==========================================
         print("[PROCESS] Validating...")
         for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
-            self.model.change_image(self.images[i])
-            self.model.network.run(self.params["exposure_time"])
-            tools.reset_network(self.model.network)
+            self.model.set_input_image(self.images[i], self.params["spontaneous_rate"])
+            self.model.run(self.params["exposure_time"])
+            self.model.reset()
+        
             
         # ===================================== ラベルの予測と精度の算出 ===================================
         predict_labels = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=10)
         acc = np.sum(self.labels == predict_labels) / len(self.labels)
+        
+        if examination_name is None:
+            validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "validated_acc=" + f"{acc*100:.2f}%"
+        else:
+            validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "validated_acc=" + f"{acc*100:.2f}%_" + examination_name
+        
         # labels : 画像のラベル
         # predict_labels : 予測されたラベル
         print("acc:", acc)
 
 
         # ===================================== ディレクトリの作成 ===================================
-        validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "validated_acc=" + f"{acc*100:.2f}%"
         os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "wrong_images"), exist_ok=True)
         for i in range(10):
             os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, f"wrong_images/class_{i}"), exist_ok=True)
@@ -123,6 +130,15 @@ class Validator():
         os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs"), exist_ok=True)
         
         tools.save_parameters(self.target_path + f"/VALIDATING/{validation_name}/", self.params)
+            
+        # モニターを保存
+        if self.network_type == "WTA":
+            tools.save_monitor(self.model.network["spikemon_inp"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_inp.pkl"))
+            tools.save_monitor(self.model.network["spikemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_N_1.pkl"))
+            tools.save_monitor(self.model.network["spikemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_N_2.pkl"))
+            tools.save_monitor(self.model.network["statemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "statemon_N_1.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
+            tools.save_monitor(self.model.network["statemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "statemon_N_2.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
+
         
         # ===================================== 予測ラベルと正解ラベルをテキストで保存 ===================================
         wronged_image_idx = list(np.where(self.labels != predict_labels)[0]) # 不正解画像のインデックスを取得
@@ -150,6 +166,7 @@ class Validator():
         plt.title('Confusion Matrix')
         plt.xlabel('Predicted Label')
         plt.ylabel('True Label')
+        plt.tight_layout()
         plt.savefig(self.target_path + f"/VALIDATING/{validation_name}/graphs/confusion_matrix.png")
         plt.close()
         
@@ -161,12 +178,12 @@ class Validator():
             # spike_cnt4all[image_idx][neuron_idx]
 
             # 発火数の多い上位10個のニューロンのインデックスを取得
-            top_10_neurons = np.argsort(spike_counts)[-10:][::-1]
+            top_neurons = np.argsort(spike_counts)[::-1]
             
             # 発火数が同じニューロンを昇順に並び替え
             sorted_neurons = []
-            for count in sorted(set(spike_counts[top_10_neurons]), reverse=True):
-                same_count_neurons = [n for n in top_10_neurons if spike_counts[n] == count]
+            for count in sorted(set(spike_counts[top_neurons]), reverse=True):
+                same_count_neurons = [n for n in top_neurons if spike_counts[n] == count]
                 sorted_neurons.extend(sorted(same_count_neurons))
             top_10_neurons = sorted_neurons[:10]
             
@@ -176,6 +193,7 @@ class Validator():
                          f"True: {self.labels[idx]}, Predicted: {predict_labels[idx]}", fontsize=16)
             im = axes[0, 0].imshow(self.images[idx], cmap='gray')
             axes[0, 0].axis('off')
+            axes[0, 0].set_title(f"Input Image\nlabel: {self.labels[idx]}")
             for i in range(5):
                 axes[0, i].axis('off')
             for i, neuron_idx in enumerate(top_10_neurons):
@@ -191,7 +209,7 @@ class Validator():
                 axes[row, col].set_title(f"Neuron {neuron_idx}\nSpikes: {spike_counts[neuron_idx]}\nassigned label: {self.assigned_labels[neuron_idx]}")
                 fig.colorbar(im, ax=axes[row, col], fraction=0.046, pad=0.04)
             plt.tight_layout()
-            plt.savefig(f"{self.target_path}/VALIDATING/{validation_name}/top 10 wrong weights against each image/class_{self.labels[idx]}/top_10_weights_image_{idx}.png")
+            plt.savefig(f"{self.target_path}/VALIDATING/{validation_name}/top 10 wrong weights against each image/class_{self.labels[idx]}/true_{self.labels[idx]}_predicted_{predict_labels[idx]}_image_{idx}.png")
             plt.close()
             
         # ================================ 任意のRFがどの画像に対して発火したかランキングを保存 ================================
@@ -202,7 +220,7 @@ class Validator():
             
             fig, axes = plt.subplots(3, 5, figsize=(20, 8))
             fig.suptitle(f"Top 10 Images for Neuron {idx}\n"
-                         f"neuron label: {self.labels[idx]}", fontsize=16)
+                         f"neuron label: {self.assigned_labels[idx]}", fontsize=16)
             weight = self.model.network["S_0"].w[:, idx].reshape(28, 28)
             im = axes[0, 0].imshow(weight, cmap='viridis')
             axes[0, 0].axis('off')

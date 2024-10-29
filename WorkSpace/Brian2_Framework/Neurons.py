@@ -85,8 +85,32 @@ class Poisson_Input_Neuron(PoissonGroup):
         super().__init__(N, self.rates * Hz, *args, **kwargs)
     
     def change_image(self, image:np.array, spontaneous_rate:int=0):
-        self.rates = self.get_rate_from_image(image, spontaneous_rate)
+        # self.rates = self.get_rate_from_image(image, spontaneous_rate)
+        self.rates = self.get_rate_from_image_equalize_sum(image, 4480)
         self.rates_ = self.rates
+        
+    def get_rate_from_image_equalize_sum(self, image:np.array, goal_sum:int):
+        """
+        画素の合計値がgoal_sumになるように正規化します。
+
+        Args:
+            image (np.array): 正規化する画像
+            goal_sum (int): 正規化後の画素の合計値
+        """
+        # 画像の画素値の合計を計算
+        current_sum = np.sum(image)
+        
+        # 0除算を避けるためのチェック
+        if current_sum == 0:
+            return np.zeros_like(image)
+        
+        # 正規化係数を計算
+        normalization_factor = goal_sum / current_sum
+        
+        # 画像を正規化
+        normalized_image = image * normalization_factor
+        
+        return normalized_image.flatten() * Hz
 
     def get_rate_from_image(self, image:list, spontaneous_rate):
         image = np.array(image).astype(float)

@@ -9,10 +9,13 @@ import pickle as pkl
 from tqdm import tqdm
 import time
 import shutil
+import numpy as np
+import re
+from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
 
 def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
     """
-    重みの合計値をgoal_sum_weightに正規化する
+    重みの合計値がgoal_sum_weightになるように正規化する
 
     Args:
         synapses (Synapses): Synapsesオブジェクトのリスト
@@ -182,7 +185,7 @@ def change_dir_name(dir_path, add_name):
         old_file = os.path.join(dir_path, filename)
         new_file = os.path.join(new_save_path, filename)
         os.rename(old_file, new_file)
-    time.sleep(1)
+    time.sleep(3)
     shutil.rmtree(dir_path)
     print(f"[INFO] ディレクトリ名を {new_save_path} に変更しました。")
     return new_save_path
@@ -226,28 +229,7 @@ def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=
     
     return firing_rates
 
-
-def reset_network(network):
-    """
-    ネットワークをリセットします。
-    """
-    # ニューロン
-    neurons = [obj for obj in network.objects if isinstance(obj, NeuronGroup)]
-
-    # シナプス
-    synapses = [obj for obj in network.objects if isinstance(obj, Synapses)]
-    
-    for i in range(len(neurons)):
-        neurons[i].v = -60
-        
-    for i in range(len(synapses)):
-        synapses[i].ge = 0
-        synapses[i].gi = 0
-        try:
-            synapses[i].apre = 0
-            synapses[i].apost = 0
-        except:
-            pass
+# ===================================== パラメータの保存・読み込みｆ ==========================================
 
 def load_parameters(file_path:str):
     """
@@ -272,17 +254,17 @@ def load_parameters(file_path:str):
                 loaded_data[key_name] = float(value) * eval(unit)
     return loaded_data
 
-def save_parameters(dir_path:str, parameters:dict):
+def save_parameters(save_path:str, parameters:dict):
     """
     JSONファイルにパラメータを保存します。Brian2の単位変換も行います。
 
     Args:
-        dir_path (str): ディレクトリのパス
+        save_path (str): ディレクトリのパス
         parameters (dict): パラメータの辞書
     Returns:
         None
     """
-    with open(dir_path + "parameters.json", "w") as f:
+    with open(save_path, "w") as f:
         json.dump(parameters, f, indent=4, default=convert_quantity)
         
 def memo_assigned_labels(save_path, assigned_labels):
@@ -301,5 +283,44 @@ def save_assigned_labels(save_path, assigned_labels):
     with open(save_path + "assigned_labels.pkl", "wb") as f:
         pkl.dump(assigned_labels, f)
 
+# ===================================== モニターデータの保存 ==========================================
+        
+def save_monitor(monitor, save_path, record_variables=None):
+    """
+    モニターデータを保存する関数
+    
+    Args:
+        monitor: Brian2のSpikeMonitorまたはStateMonitor
+        save_path (str): 保存先のパス
+        record_variables (list, optional): StateMonitorの場合の記録変数リスト
+    """
+    with open(save_path, "wb") as f:
+        if isinstance(monitor, SpikeMonitor):
+            monitor_data = SpikeMonitorData(monitor)
+        elif isinstance(monitor, StateMonitor):
+            monitor_data = StateMonitorData(monitor, record_variables)
+        pkl.dump(monitor_data, f)
+
+def load_monitor(file_path:str):
+    """
+    pklファイル二保存されたモニターを読み込みます。以下のような方法で実際のモニター同様にデータを読み出せます。
+    
+    例：
+    monitor = load_monitor(file_path)
+    print(monitor.name)
+    print(monitor.t)
+    """
+    with open(file_path, "rb") as f:
+        monitor = pkl.load(f)
+
+    return monitor
+
+# ===================================== 分割してモニターを保存 ==========================================
+def save_separately_and_clear_monitors(save_path, monitor, current_step:int):
+    """
+    モニターを分割して保存します。保存したモニターはクリアされます。
+    """
+    save_monitor(monitor, os.path.join(save_path, f"{monitor.name}_{current_step}.pkl"))
+    monitor.clear()
 
 

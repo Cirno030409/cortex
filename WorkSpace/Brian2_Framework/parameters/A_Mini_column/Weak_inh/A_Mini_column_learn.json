@@ -1,13 +1,14 @@
 {
-    "n_samples": 10,
+    "n_samples": 50,
     "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
-    "n_e": 100,
-    "n_i": 100,
+    "n_e": 20,
+    "n_i": 20,
     "max_rate": 60,
     "spontaneous_rate": 0,
-    "record_interval": 100,
+    "record_interval": 50,
+    "k": 2,
     "network_type": "WTA",
     "neuron_params_e": {
         "I_noise": 0,
@@ -51,11 +52,12 @@
         "g_gain": 1
     },
     "static_synapse_params_ei": {
-        "w": 30,
-        "delay": "1*ms"
+        "w": 30
     },
     "static_synapse_params_ie": {
-        "w": 22,
-        "delay": "1*ms"
+        "w": 10
+    },
+    "inter_column_synapse_params_ei": {
+        "w": 30
     }
 }

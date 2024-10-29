@@ -33,15 +33,46 @@ class Network_Frame(Network):
         """
         self.obj["S_0"].namespace["sw"] = 0
         
-    def change_image(self, image:np.ndarray, spontaneous_rate:int=0):
+    def set_input_image(self, image:np.ndarray, spontaneous_rate:int=0):
         """
-        入力画像を変更します。obj["N_inp"]が入力層であると想定しています。
+        入力画像を設定します。obj["N_inp"]が入力層であると想定しています。
 
         Args:
             image (np.ndarray): 入力画像\n
             spontaneous_rate (int, optional): 自発発火率. Defaults to 0.
         """
         self.obj["N_inp"].change_image(image, spontaneous_rate)
+        
+    def run(self, duration:int):
+        """
+        ネットワークを実行します。
+
+        Args:
+            duration (int): 実行時間
+        """
+        self.network.run(duration)
+        
+    def reset(self):
+        """
+        ネットワークをリセットします。
+        """
+        # ニューロン
+        neurons = [obj for obj in self.network.objects if isinstance(obj, NeuronGroup)]
+
+        # シナプス
+        synapses = [obj for obj in self.network.objects if isinstance(obj, Synapses)]
+        
+        for i in range(len(neurons)):
+            neurons[i].v = -60
+            
+        for i in range(len(synapses)):
+            synapses[i].ge = 0
+            synapses[i].gi = 0
+            try:
+                synapses[i].apre = 0
+                synapses[i].apost = 0
+            except:
+                pass
         
 class Diehl_and_Cook_WTA(Network_Frame):
     """
@@ -78,12 +109,12 @@ class Diehl_and_Cook_WTA(Network_Frame):
         # Create monitors
         if enable_monitor:
             self.network.add(
-                SpikeMonitor(self.obj["N_inp"], record=True, name="spikemon_input"),
-                SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_1"),
-                SpikeMonitor(self.obj["N_2"], record=True, name="spikemon_2"),
-                StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_1"),
-                StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=50, name="statemon_2"),
-                StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=0, name="statemon_S")
+                SpikeMonitor(self.obj["N_inp"], record=True, name="spikemon_inp"),
+                SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_N_1"),
+                SpikeMonitor(self.obj["N_2"], record=True, name="spikemon_N_2"),
+                StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name="statemon_N_1"),
+                StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name="statemon_N_2"),
+                StateMonitor(self.obj["S_0"], ["w", "apre", "apost"], record=0, name="statemon_S_0")
                 )
         self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name="spikemon_for_assign")) # ラベル割当に必要
 
@@ -209,7 +240,6 @@ class Mini_Column(Network_Frame):
         # Create monitors
         if self.enable_monitor:
             self.network.add(
-                SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_N_1"),
                 SpikeMonitor(self.obj["N_2"], record=True, name=f"mc{column_id}_spikemon_N_2"),
                 StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
                 StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
@@ -274,9 +304,6 @@ class Cortex(Network_Frame):
         
         
         # ミニカラム間を結合
-        # self.columns[1].connect_neurons(source=self.columns[0].network["mc0_N_1"], connect_to="N_2", stdp_or_normal="normal", exc_or_inh="exc", syn_name="S_mc", param_name="inter_column_synapse_params_ei", connect=True)
-        # self.columns[0].connect_neurons(source=self.columns[1].network["mc1_N_1"], connect_to="N_2", stdp_or_normal="normal", exc_or_inh="exc", syn_name="S_mc", param_name="inter_column_synapse_params_ei", connect=True)
-        
         for i in range(self.params["n_mini_column"]):
             for j in range(self.params["n_mini_column"]):
                 if i != j:

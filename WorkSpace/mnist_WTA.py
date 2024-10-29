@@ -23,18 +23,22 @@ seed = 3
 np.random.seed(seed)
 
 # ===================================== パラメータ ==========================================
-test_comment = "検証用WTA150ms seed3" #! 実験用コメント
+test_comment = "WTA - 電流値計測用" #! 実験用コメント
 PARAMS_PATH = "Brian2_Framework/parameters/WTA/WTA_learn.json" #! 使用するパラメータ
+MON_SEP_PARAMS_PATH = "Brian2_Framework/parameters/save_monitors_separately.json" #! モニター分割保存用パラメータ
 PARAMS_VALIDATE_PATH = "Brian2_Framework/parameters/WTA/WTA_validate.json" #! 使用する検証用パラメータ
-PLOT = False # プロットするか
-VALIDATION = True # Accuracyを計算するか
+PLOT = True # プロットするか
+SAVE_MONITORS_SEPARATELY = False # モニターを分割して保存するか
+VALIDATION = False # Accuracyを計算するか
 SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
 # ===================================================================================================
 
 params = tools.load_parameters(PARAMS_PATH) # パラメータを読み込み
+mon_sep_params = tools.load_parameters(MON_SEP_PARAMS_PATH) # モニター分割保存用パラメータを読み込み
 name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
 TARGET_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
 os.makedirs(os.path.join(TARGET_PATH, "LEARNING", "learning weight matrix"), exist_ok=True)
+os.makedirs(os.path.join(TARGET_PATH, "LEARNING", "monitors"), exist_ok=True)
 SAVE_PATH = TARGET_PATH
 tools.save_parameters(os.path.join(SAVE_PATH, "parameters.json"), params) # パラメータをメモる
 
@@ -50,19 +54,20 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
     all_labels.extend(labels)
     try:
         for i in tqdm(range(params["n_samples"]), desc="simulating", dynamic_ncols=True): # 画像枚数繰り返す
-            if SAVE_WEIGHT_CHANGE_GIF: # 画像を記録
-                if i % params["record_interval"] == 0:
-                    if i != 0:
-                        plotter.firing_rate_heatmap(model.network["spikemon_for_assign"], 
-                                                    params["exposure_time"]*(i-params["record_interval"]), 
-                                                    params["exposure_time"]*i, 
-                                                    save_fig=True, save_path=SAVE_PATH + "LEARNING/learning weight matrix/", 
-                                                    n_this_fig=i+(j*params["n_samples"]))
-                    plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH + "LEARNING/learning weight matrix/", n_this_fig=i+(j*params["n_samples"]))
+            if SAVE_MONITORS_SEPARATELY and (i % mon_sep_params["separate_interval"] == 0 or i == params["n_samples"] - 1):
+                os.makedirs(os.path.join(SAVE_PATH, "separated_monitors", "spikemon_inp"), exist_ok=True)
+                tools.save_separately_and_clear_monitors(os.path.join(SAVE_PATH, "separated_monitors", "spikemon_inp"), model.network["spikemon_inp"], i//mon_sep_params["separate_interval"])
+            if SAVE_WEIGHT_CHANGE_GIF and (i % params["record_interval"] == 0 or i == params["n_samples"] - 1):
+                plotter.firing_rate_heatmap(model.network["spikemon_for_assign"], 
+                                            params["exposure_time"]*(i-params["record_interval"]), 
+                                            params["exposure_time"]*i, 
+                                            save_fig=True, save_path=SAVE_PATH + "LEARNING/learning weight matrix/", 
+                                            n_this_fig=i+(j*params["n_samples"]))
+                plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH + "LEARNING/learning weight matrix/", n_this_fig=i+(j*params["n_samples"]))
             tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
-            model.change_image(images[i], params["spontaneous_rate"]) # 入力画像の変更
-            model.network.run(params["exposure_time"])
-            tools.reset_network(model.network)
+            model.set_input_image(images[i], params["spontaneous_rate"]) # 入力画像の設定
+            model.run(params["exposure_time"])
+            model.reset() # ネットワークをリセット
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 
@@ -83,12 +88,19 @@ plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["
 if PLOT:
     plotter.set_simu_time(model.network.t)
     print("[PROCESS] Plotting results...")
-    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=300, fig_title="Raster plot of N0, N1, N2")
+    plotter.raster_plot([model.network["spikemon_inp"], model.network["spikemon_N_1"], model.network["spikemon_N_2"]], time_end=300)
     plt.savefig(SAVE_PATH + "LEARNING/raster_plot_N0_N1_N2.png")
 
-    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300, fig_title="State plot of N1")
+    plotter.state_plot(model.network["statemon_N_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300)
     plt.savefig(SAVE_PATH + "LEARNING/state_plot_N1.png")
-    plt.show()
+    # plt.show()
+    
+# モニターを保存
+tools.save_monitor(model.network["spikemon_inp"], os.path.join(SAVE_PATH, "LEARNING", "monitors", "spikemon_inp.pkl"))
+tools.save_monitor(model.network["spikemon_N_1"], os.path.join(SAVE_PATH, "LEARNING", "monitors", "spikemon_N_1.pkl"))
+tools.save_monitor(model.network["spikemon_N_2"], os.path.join(SAVE_PATH, "LEARNING", "monitors", "spikemon_N_2.pkl"))
+tools.save_monitor(model.network["statemon_N_1"], os.path.join(SAVE_PATH, "LEARNING", "monitors", "statemon_N_1.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
+tools.save_monitor(model.network["statemon_N_2"], os.path.join(SAVE_PATH, "LEARNING", "monitors", "statemon_N_2.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
 
 time.sleep(1)
 SAVE_PATH = tools.change_dir_name(SAVE_PATH, "_comp/") # 完了したのでディレクトリ名を変更
@@ -102,5 +114,6 @@ if VALIDATION:
                         params_json_path=PARAMS_VALIDATE_PATH,
                         network_type=params["network_type"])
     validator.validate(n_samples=params["n_samples"])
+    
 
 

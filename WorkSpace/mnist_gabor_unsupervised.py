@@ -61,9 +61,9 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
                                                     n_this_fig=i+(j*params["n_samples"]))
                     plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=SAVE_PATH, n_this_fig=i+(j*params["n_samples"]))
             tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
-            model.change_image(gabor.apply2image(images[i], size=11, sigma=2.201, theta=np.pi/2, lambd=5.6, gamma=1, psi=0), params["spontaneous_rate"]) # 入力画像の変更
-            model.network.run(params["exposure_time"])
-            tools.reset_network(model.network)
+            model.set_input_image(gabor.apply2image(images[i], size=11, sigma=2.201, theta=np.pi/2, lambd=5.6, gamma=1, psi=0), params["spontaneous_rate"]) # 入力画像の設定
+            model.run(params["exposure_time"])
+            model.reset()
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
         
@@ -85,10 +85,10 @@ plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["
 if PLOT:
     plotter.set_simu_time(model.network.t)
     print("[PROCESS] Plotting results...")
-    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], fig_title="Raster plot of N0, N1, N2")
+    plotter.raster_plot([model.network["spikemon_inp"], model.network["spikemon_1"], model.network["spikemon_2"]])
     plt.savefig(SAVE_PATH + "raster_plot_N0_N1_N2.png")
 
-    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], fig_title="State plot of N1")
+    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"])
     plt.savefig(SAVE_PATH + "state_plot_N1.png")
     plt.show()
 

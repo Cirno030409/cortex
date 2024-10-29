@@ -59,9 +59,9 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
                                                     n_this_fig=i+(j*params["n_samples"]))
                     plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], save_fig=True, save_path=os.path.join(SAVE_PATH, "LEARNING", "learning weight matrix"), n_this_fig=i+(j*params["n_samples"]))
             tools.normalize_weight(model.network["S_0"], params["n_inp"] // 10, params["n_inp"], params["n_e"]) # 重みの正規化
-            model.change_image(images[i], params["spontaneous_rate"]) # 入力画像の変更
-            model.network.run(params["exposure_time"]) # シミュレーション実行
-            tools.reset_network(model.network) # ネットワークをリセット
+            model.set_input_image(images[i], params["spontaneous_rate"]) # 入力画像の設定
+            model.run(params["exposure_time"]) # シミュレーション実行
+            model.reset() # ネットワークをリセット
     except KeyboardInterrupt:
         print("[INFO] Simulation interrupted by user.")
 
@@ -83,23 +83,14 @@ plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["
 if PLOT:
     plotter.set_simu_time(model.network.t)
     print("[PROCESS] Plotting results...")
-    plotter.raster_plot([model.network["spikemon_0"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=300, fig_title="Raster plot of N0, N1, N2")
+    plotter.raster_plot([model.network["spikemon_inp"], model.network["spikemon_1"], model.network["spikemon_2"]], time_end=300)
     plt.savefig(SAVE_PATH + "LEARNING/raster_plot_N0_N1_N2.png")
 
-    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300, fig_title="State plot of N1")
+    plotter.state_plot(model.network["statemon_1"], 0, ["v", "Ie", "Ii", "ge", "gi"], time_end=300)
     plt.savefig(SAVE_PATH + "LEARNING/state_plot_N1.png")
     plt.show()
 
 time.sleep(1)
 SAVE_PATH = tools.change_dir_name(SAVE_PATH, "_comp/") # 完了したのでディレクトリ名を変更
 
-# ===================================== 精度の計算 ==========================================
-if VALIDATION:
-    params = tools.load_parameters(PARAMS_VALIDATE_PATH)
-    validator = Validator(
-                        target_path=SAVE_PATH, 
-                        assigned_labels_path=f"{SAVE_PATH}/assigned_labels.pkl", 
-                        params_json_path=PARAMS_VALIDATE_PATH,
-                        network_type=params["network_type"])
-    validator.validate(n_samples=params["n_samples"])
 
