@@ -19,18 +19,19 @@ from Brian2_Framework.Synapses import *
 from Brian2_Framework.Validator import Validator
 import pickle as pkl
 
-inh_weights = np.arange(0, 22, 1)
-for weight in tqdm(inh_weights, desc="inh_weight progress", dynamic_ncols=True):
+exc_weights = [2.8, 2.9]
+for weight in tqdm(exc_weights, desc="exc_weight progress", dynamic_ncols=True):
     # ===================================== 記録用パラメータ ==========================================
-    test_comment = f"Cortex - カラム間抑制結合(全結合) - 抑制結合重み{weight}" #! 実験用コメント
+    test_comment = f"Cortex - カラム間抑制結合(全結合)  labels=[0, 1, 2, 3] - 興奮結合重み{weight}" #! 実験用コメント
     PARAMS_PATH = "Brian2_Framework/parameters/Cortex/Cortex_learn.json" #! 使用するパラメータ
+    PARAMS_MC_PATH = "Brian2_Framework/parameters/Mini_Column/Mini_Column_learn.json" #! 使用するミニカラムのパラメータ
     PARAMS_VALIDATE_PATH = "Brian2_Framework/parameters/Cortex/Cortex_validate.json" #! 使用するvalidation用パラメータ
-    PLOT = True # プロットするか
     SAVE_WEIGHT_CHANGE_GIF = True # 重みの変遷.GIFを保存するか
     # ===================================================================================================
 
     params = tools.load_parameters(PARAMS_PATH) # パラメータを読み込み
-    params_mc = tools.load_parameters(params["mini_column_params_path"]) # ミニカラムのパラメータを読み込み
+    params_mc = tools.load_parameters(PARAMS_MC_PATH) # ミニカラムのパラメータを読み込み
+    params_mc["static_synapse_params_ei"]["w"] = weight
     np.random.seed(params["seed"]) # 乱数のシードを設定
     name_test = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + test_comment
     TARGET_PATH = "examined_data/" + name_test + "/" # 色々保存するディレクトリ
@@ -41,14 +42,14 @@ for weight in tqdm(inh_weights, desc="inh_weight progress", dynamic_ncols=True):
     tools.save_parameters(os.path.join(SAVE_PATH, "learning_mini_column_parameters.json"), params_mc) # ミニカラムのパラメータをメモる
 
     plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成
-    model = Cortex(enable_monitor=PLOT, params_json_path=PARAMS_PATH) # ネットワークを作成
+    model = Cortex(params["enable_monitor"], params_cortex=params, params_mc=params_mc) # ネットワークを作成
 
     #! ===================================== シミュレーション ==========================================
     print("▶ Running simulation...")
     print(f"▶ Examination name: {name_test}")
     all_labels = [] # 全Epochで入力された全ラベル
     for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True): # エポック数繰り返す
-        images, labels = Datasets.get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得
+        images, labels = Datasets.get_mnist_sample_equality_labels(params["n_samples"], labels=[0, 1, 2, 3], dataset="train") # テスト用の画像とラベルを取得
         all_labels.extend(labels)
         try:
             for i in tqdm(range(params["n_samples"]), desc="simulating", dynamic_ncols=True): # 画像枚数繰り返す
@@ -71,23 +72,18 @@ for weight in tqdm(inh_weights, desc="inh_weight progress", dynamic_ncols=True):
 
 
     # ===================================== シミュレーション結果のプロット ==========================================
+    with open(SAVE_PATH + "LEARNING/input image labels.json", "w") as f:
+        json.dump([int(label) for label in all_labels], f)  # numpy.int32をintに変換
     if SAVE_WEIGHT_CHANGE_GIF:
         for k in range(params["n_mini_column"]):
             plotter.weight_plot(model.network[f"mc{k}_S_0"], n_pre=params_mc["n_inp"], n_post=params_mc["n_e"], save_path=SAVE_PATH + f"LEARNING/", n_this_fig=f"weight_plot(mc{k})")
             tools.make_gif(25, SAVE_PATH + f"LEARNING/learning weight matrix/mini column{k}/", SAVE_PATH + "LEARNING/", f"weight_change(mc{k}).gif")
-    if PLOT:
-        plotter.set_simu_time(model.network.t) # シミュレーション時間を設定
-        print("▶ Plotting results...")
-        time_end = 10000
-        
+    if params["enable_monitor"]:        
+        os.makedirs(SAVE_PATH + f"LEARNING/Monitors/", exist_ok=True)
         for k in range(params["n_mini_column"]):
-            plotter.raster_plot([model.network["spikemon_inp"], model.network[f"mc{k}_spikemon_for_assign"], model.network[f"mc{k}_spikemon_N_2"]], time_end=time_end, save_path=SAVE_PATH + f"LEARNING/Raster plot(mc{k}).png")
-            plotter.state_plot(model.network[f"mc{k}_statemon_N_2"], 0, ["v", "ge", "gi"], time_end=time_end, save_path=SAVE_PATH + f"LEARNING/State plot(mc{k}).png")
-            tools.save_monitor(model.network["spikemon_inp"], SAVE_PATH + f"LEARNING/spikemon_inp.pkl")
-            tools.save_monitor(model.network[f"mc{k}_spikemon_for_assign"], SAVE_PATH + f"LEARNING/spikemon_for_assign(mc{k}).pkl")
-            tools.save_monitor(model.network[f"mc{k}_spikemon_N_2"], SAVE_PATH + f"LEARNING/spikemon_N_2(mc{k}).pkl")
-            tools.save_monitor(model.network[f"mc{k}_statemon_N_2"], SAVE_PATH + f"LEARNING/statemon_N_2(mc{k}).pkl", ["v", "ge", "gi"])
-        # plt.show()
+            tools.save_monitor(model.network["spikemon_inp"], SAVE_PATH + f"LEARNING/Monitors/spikemon_inp.pkl")
+            tools.save_monitor(model.network[f"mc{k}_spikemon_for_assign"], SAVE_PATH + f"LEARNING/Monitors/spikemon_for_assign(mc{k}).pkl")
+            tools.save_monitor(model.network[f"mc{k}_spikemon_N_2"], SAVE_PATH + f"LEARNING/Monitors/spikemon_N_2(mc{k}).pkl")
 
 
     time.sleep(3)

@@ -41,39 +41,71 @@ def get_mnist_sample(n_samples=1, dataset='train'):
     indices = np.random.choice(len(img), n_samples, replace=False)
     return img[indices], label[indices]
 
-def get_mnist_sample_equality_labels(n_samples=1, dataset='train'):
+def get_mnist_sample_equality_labels(n_samples=1, dataset='train', labels:list=None):
     """
     各ラベルから均等枚数のランダム画像を取得します。
     
     Args:
-        n_samples (int): 取得するサンプル数(１０の倍数枚である必要がある)
+        n_samples (int): 取得するサンプル数(指定ラベル数の倍数枚である必要がある)
         dataset (str): 'train'または'test'を指定
+        labels (list, optional): 選択するラベルのリスト。Noneの場合は全ラベル(0-9)から選択
 
     Returns:
         tuple: (images, labels)
-        images: 画像データ(list)
-        labels: ラベルデータ(list)
+        images: 画像データ(numpy配列)
+        labels: ラベルデータ(numpy配列)
     """
-    if n_samples % 10 != 0:
-        raise ValueError("n_samplesは10の倍数である必要があります。")
+    if labels is None:
+        labels = list(range(10))
     
+    n_labels = len(labels)
+    if n_samples % n_labels != 0:
+        raise ValueError(f"n_samplesは{n_labels}の倍数である必要があります。")
+    
+    (img_train, label_train), (img_test, label_test) = get_mnist()
+    if dataset == 'train':
+        img, label_data = img_train, label_train
+    elif dataset == 'test':
+        img, label_data = img_test, label_test
+    else:
+        raise ValueError("datasetは'train'または'test'を指定してください。")
+        
     imgs = []
-    labels = []
-    n_img_per_label = n_samples // 10
+    selected_labels = []
+    n_img_per_label = n_samples // n_labels
     
-    for _ in range(10):
-        img, label = get_mnist_sample(n_img_per_label, dataset)
-        imgs.extend(img)
-        labels.extend(label)
+    for label in labels:
+        indices = np.where(label_data == label)[0]
+        selected_indices = np.random.choice(indices, n_img_per_label, replace=True)
+        imgs.extend(img[selected_indices])
+        selected_labels.extend([label] * n_img_per_label)
         
     # imgsとlabelsを対応を保ちながらシャッフルする
-    combined = list(zip(imgs, labels))
+    combined = list(zip(imgs, selected_labels))
     np.random.shuffle(combined)
-    imgs, labels = zip(*combined)
+    imgs, selected_labels = zip(*combined)
         
-    return np.array(imgs), np.array(labels)
+    return np.array(imgs), np.array(selected_labels)
 
 def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
+    """
+    指定されたラベルからn_samples枚の画像をランダムに選択します。
+    また、ダウンサンプリングを行うことも可能です。
+
+    Args:
+        labels (list): 選択するラベルのリスト
+        n_samples (int, optional): 選択する画像の枚数
+        down_sample (int, optional): ダウンサンプリングの倍率
+        dataset (str, optional): 'train'または'test'を指定
+
+    Raises:
+        ValueError: datasetは'train'または'test'を指定してください。
+
+    Returns:
+        tuple: (images, labels)
+        images: 画像データ(numpy配列)
+        labels: ラベルデータ(numpy配列)
+    """
     (img_train, label_train), (img_test, label_test) = get_mnist()
     if dataset == 'train':
         img, label_data = img_train, label_train
@@ -166,16 +198,8 @@ def divide_image_into_chunks(image, chunk_size):
     return np.array(chunks)
 
 if __name__ == "__main__":
-    seed = 3
-    np.random.seed(seed)
-    # images, labels = get_mnist_sample(n_samples=10000, dataset='train')
-    images, labels = get_mnist_image([3], n_samples=100)
-    
-    chunked_images = []
-    for image in images:
-        chunked_images.extend(divide_image_into_chunks(image, 7))
-
-    save_images(chunked_images, "MNIST出力")
+    images, labels = get_mnist_sample_equality_labels(n_samples=30, dataset='train', labels=[0, 1, 2])
+    print(labels)
     
     
     

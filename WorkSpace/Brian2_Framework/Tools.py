@@ -12,6 +12,7 @@ import shutil
 import numpy as np
 import re
 from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
+from brian2 import SpikeMonitor
 
 def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
     """
@@ -38,7 +39,7 @@ def make_gif(fps=20, inp_dir="", out_dir="", out_name="output.gif"):
     Args:
         fps (int): フレームレート
         inp_dir (str): 入力ディレクトリ
-        out_dir (str): 出力ディレクトリ
+        out_dir (str): 出力ィレクトリ
         out_name (str): 出力ファイル名
     """
 
@@ -112,7 +113,7 @@ def convert_quantity(obj):
     
 def get_spikes_within_time_range(spikemon, start_time, end_time):
     """
-    スパイクモニターから指定された時間範囲内のスパイクを取得する
+    スパイクモニターから指定され時間範囲内のスパイク取得する
     
     Args:
         spikemon (SpikeMonitor): スパイクモニター
@@ -130,39 +131,31 @@ def get_spikes_within_time_range(spikemon, start_time, end_time):
 def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:list, presentation_time, reset_time):
     """
     ニューロンにラベルを割り当てます。
-
-    Args:
-        spikemon (SpikeMonitor): スパイクモニター
-        n_neuron (int): ニューロンの数
-        n_labels (int): ラベルの種類数
-        input_labels (list): 学習で使用された画像のラベルのリスト（入力された順番）
-        presentation_time (float): 画像提示時間(ms)
-        reset_time (float): 画像リセット時間(ms)
-    Returns:
-        assigned_labels (list): ニューロンに割り当てられたラベルのリスト
     """
     presentation_time /= ms
     reset_time /= ms
     interval_time = presentation_time + reset_time
-    spikes = list(zip(spikemon.i, spikemon.t))
+    
+    # スパイクデータをNumPy配列に変換
+    spike_times = spikemon.t/ms if hasattr(spikemon.t, 'dim') else spikemon.t
+    spike_indices = spikemon.i
+    
+    # 結果を格納する配列を初期化
     spike_cnt = np.zeros((n_neuron, n_labels))
-    for n, label in tqdm(enumerate(input_labels), desc="assigning labels", total=len(input_labels)):
+    
+    # 各画像の時間間隔を計算
+    for n, label in enumerate(input_labels):
         start_time = n * interval_time
         end_time = (n + 1) * interval_time
-        neuron_idx = [spike[0] for spike in spikes if start_time <= spike[1]/ms < end_time]
-        spike_cnt[neuron_idx, label] += 1
-
-    assigned_labels = np.full(n_neuron, -1)  # デフォルトは-1で初期化
-    for i in range(n_neuron):
-        max_indices = np.where(spike_cnt[i] == spike_cnt[i].max())[0]
-        if max_indices.size > 0:
-            assigned_labels[i] = max_indices[0] # 複数の最大値があった場合は最初のものを選択
-        else:
-            print(f"警告: ニューロン {i} のスパイク数が全て0です")
-            print(f"NaN の有無: {np.isnan(spike_cnt[i]).any()}")
-            print(f"inf の有無: {np.isinf(spike_cnt[i]).any()}")
+        
+        # 時間窓内のスパイクを一括で特定
+        time_mask = (spike_times >= start_time) & (spike_times < end_time)
+        active_neurons = spike_indices[time_mask]
+        
+        # 発火カウントを更新
+        np.add.at(spike_cnt, (active_neurons, label), 1)
     
-    return assigned_labels
+    return np.argmax(spike_cnt, axis=1)
 
 def change_dir_name(dir_path, add_name):
     """
@@ -190,7 +183,7 @@ def change_dir_name(dir_path, add_name):
     print(f"[INFO] ディレクトリ名を {new_save_path} に変更しました。")
     return new_save_path
 
-def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=False):
+def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=False, mode:str="rate"):
     """
     スパイクモニターからニューロンごとの発火率を取得する
     
@@ -199,6 +192,9 @@ def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=
         start_time (float): 開始時間(ms)
         end_time (float): 終了時間(ms)
         enable_print (bool): 発火率を表示するか
+        mode (str): 発火率の計算方法
+            "rate": 発火率を計算
+            "count": 発火回数を計算
     Returns:
         firing_rates (np.ndarray): ニューロンごとの発火率
     """
@@ -213,7 +209,10 @@ def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=
         spikes = [spike[1] for spike in spikes]
         spike_counts = np.bincount(spikes, minlength=len(spikemon.count))
     
-    firing_rates = spike_counts / (duration / second)
+    if mode == "rate":
+        firing_rates = spike_counts / (duration / second)
+    elif mode == "count":
+        firing_rates = spike_counts
     
     # 発火率を表示
     if enable_print:
@@ -269,7 +268,7 @@ def save_parameters(save_path:str, parameters:dict):
         
 def memo_assigned_labels(save_path, assigned_labels):
     """
-    ニューロンに割り当てられたラベルを読みやす形でテキストファイルに保存します。
+    ニューロンに割り当てらたラベルを読みやす形でテキストファイルに保存します。
     """
     with open(save_path + "assigned_labels.txt", "w") as f:
         f.write("[Assigned labels]\n")
@@ -285,7 +284,7 @@ def save_assigned_labels(save_path, assigned_labels):
 
 # ===================================== モニターデータの保存 ==========================================
         
-def save_monitor(monitor, save_path, record_variables=None):
+def save_monitor(monitor, save_path, record_variables=None, compress=True):
     """
     モニターデータを保存する関数
     
@@ -293,13 +292,24 @@ def save_monitor(monitor, save_path, record_variables=None):
         monitor: Brian2のSpikeMonitorまたはStateMonitor
         save_path (str): 保存先のパス
         record_variables (list, optional): StateMonitorの場合の記録変数リスト
+        compress (bool): 圧縮して保存するかどうか（デフォルト：True）
     """
     with open(save_path, "wb") as f:
         if isinstance(monitor, SpikeMonitor):
             monitor_data = SpikeMonitorData(monitor)
         elif isinstance(monitor, StateMonitor):
-            monitor_data = StateMonitorData(monitor, record_variables)
-        pkl.dump(monitor_data, f)
+            monitor_data = StateMonitorData(monitor, monitor.record_variables)
+        elif isinstance(monitor, SpikeMonitorData):
+            monitor_data = monitor
+        elif isinstance(monitor, StateMonitorData):
+            monitor_data = monitor
+        else:
+            raise ValueError("保存できるモニターはSpikeMonitor, StateMonitor, SpikeMonitorData, StateMonitorDataのみです。")
+        
+        if compress:
+            pkl.dump(monitor_data, f, protocol=pkl.HIGHEST_PROTOCOL)
+        else:
+            pkl.dump(monitor_data, f)
 
 def load_monitor(file_path:str):
     """
@@ -316,11 +326,65 @@ def load_monitor(file_path:str):
     return monitor
 
 # ===================================== 分割してモニターを保存 ==========================================
-def save_separately_and_clear_monitors(save_path, monitor, current_step:int):
+def save_all_monitors(save_path:str, network, index:int=None, compress=True):
+    # NOTE 分割保存すると謎に恐ろしいほどメモリを消費するバグあり
     """
-    モニターを分割して保存します。保存したモニターはクリアされます。
+    ネットワーク内の全てのモニターを保存する関数。
+    indexを指定すると，モニター名のフォルダを作成し，その中に分割したモニターを保存し，モニターをクリアします。
+    
+    Args:
+        save_path (str): 保存先のパス
+        network (Network): モニターを含むネットワーク
+        index (int, optional): 分割保存時のインデックス
+        compress (bool): 圧縮して保存するかどうか
     """
-    save_monitor(monitor, os.path.join(save_path, f"{monitor.name}_{current_step}.pkl"))
-    monitor.clear()
+    os.makedirs(save_path, exist_ok=True)
+    for item in network.objects:
+        if isinstance(item, SpikeMonitor):
+            if index is None:
+                save_monitor(item, os.path.join(save_path, f"{item.name}.pkl"), compress=compress)
+            else:
+                os.makedirs(os.path.join(save_path, item.name), exist_ok=True)
+                save_monitor(item, os.path.join(save_path, item.name, f"{index}.pkl"), compress=compress)
+                # 既存のモニターを削除
+                network.remove(item)
+                # 新しいモニターを作成して追加
+                new_spikemon = SpikeMonitor(item.source, record=True, name=item.name)
+                network.add(new_spikemon)
+                
+        elif isinstance(item, StateMonitor):
+            if index is None:
+                save_monitor(item, os.path.join(save_path, f"{item.name}.pkl"), item.record_variables, compress=compress)
+            else:
+                os.makedirs(os.path.join(save_path, item.name), exist_ok=True)
+                save_monitor(item, os.path.join(save_path, item.name, f"{index}.pkl"), item.record_variables, compress=compress)
+                # 既存のモニターを削除
+                network.remove(item)
+                # 新しいモニターを作成して追加
+                new_statemon = StateMonitor(item.source, item.record_variables, record=True, name=item.name)
+                network.add(new_statemon)
+
+def merge_separated_monitors(dir_path:str):
+    """
+    分割して保存したモニターを結合して返します。
+    結合したいモニターが入っているディレクトリのパスを指定します。
+    """
+    # dir_path内のpklファイルのパスを取得
+    monitor_paths = []
+    for file in os.listdir(dir_path):
+        if file.endswith(".pkl"):
+            monitor_paths.append(os.path.join(dir_path, file))
+    monitor_paths.sort(key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
+    
+    if len(monitor_paths) == 0:
+        print(f"[WARNING] 指定されたディレクトリにモニターファイルが見つかりません。")
+        return None
+    
+    monitors = [load_monitor(path) for path in monitor_paths]
+    merged_monitor = monitors[0]
+    for monitor in monitors[1:]:
+        merged_monitor.extend(monitor)
+    return merged_monitor
+
 
 

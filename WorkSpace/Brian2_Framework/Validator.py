@@ -26,7 +26,7 @@ class Validator():
 
         Args:
             target_path (str): 重みを読み込んだり，結果を保存するディレクトリのパス
-            assigned_labels_path (str): 割り当てられたラベルを保存したパス
+            assigned_labels_path (str): 割り当てられたラベルを保存した��ス
             network_type (str): ネットワークの種類
             params_json_path (str): ネットワークのパラメータを保存したjsonファイルのパス
             
@@ -38,12 +38,13 @@ class Validator():
         self.weight_path = os.path.join(target_path, "weights.npy")
         self.params = tools.load_parameters(params_json_path)
         self.network_type = network_type
+        self.enable_monitor = enable_monitor
         if network_type == "WTA":
-            self.model = Diehl_and_Cook_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Diehl_and_Cook_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         elif network_type == "Chunk_WTA":
-            self.model = Chunk_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Chunk_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         elif network_type == "WTA_CS":
-            self.model = Center_Surround_WTA(enable_monitor=True, params_json_path=params_json_path) # ネットワークを作成
+            self.model = Center_Surround_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         else:
             raise ValueError("Validation用のネットワークの種類を正しくしてください。:", network_type)
         
@@ -76,6 +77,7 @@ class Validator():
             start_time = n * interval
             end_time = (n + 1) * interval
             # interval内のニューロン別のスパイク数をカウント
+            
             neuron_idx = [spike[0] for spike in self.spikes_list if start_time <= spike[1]/ms < end_time] # インターバル内に発火したニューロンidxのリスト
             # neuron_idx = [18, 28, 10, ...]
             for i in neuron_idx: # インターバル内のスパイク数をニューロン別にカウント
@@ -100,6 +102,8 @@ class Validator():
         
         # ===================================== ネットワークの実行 ==========================================
         print("[PROCESS] Validating...")
+        print("[INFO] validation name:", examination_name)
+        print("[INFO] object directory:", self.target_path)
         for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
             self.model.set_input_image(self.images[i], self.params["spontaneous_rate"])
             self.model.run(self.params["exposure_time"])
@@ -128,16 +132,18 @@ class Validator():
             os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, f"top 10 wrong weights against each image/class_{i}"), exist_ok=True)
         os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "top 10 images neurons fire"), exist_ok=True)
         os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs"), exist_ok=True)
-        
-        tools.save_parameters(self.target_path + f"/VALIDATING/{validation_name}/", self.params)
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "monitors"), exist_ok=True)
+                
+        tools.save_parameters(self.target_path + f"/VALIDATING/{validation_name}/validation_params.json", self.params)
             
         # モニターを保存
-        if self.network_type == "WTA":
-            tools.save_monitor(self.model.network["spikemon_inp"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_inp.pkl"))
-            tools.save_monitor(self.model.network["spikemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_N_1.pkl"))
-            tools.save_monitor(self.model.network["spikemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "spikemon_N_2.pkl"))
-            tools.save_monitor(self.model.network["statemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "statemon_N_1.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
-            tools.save_monitor(self.model.network["statemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "statemon_N_2.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
+        if self.enable_monitor:
+            if self.network_type == "WTA":
+                tools.save_monitor(self.model.network["spikemon_inp"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "spikemon_inp.pkl"))
+                tools.save_monitor(self.model.network["spikemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "spikemon_N_1.pkl"))
+                tools.save_monitor(self.model.network["spikemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "spikemon_N_2.pkl"))
+                tools.save_monitor(self.model.network["statemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "statemon_N_1.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
+                tools.save_monitor(self.model.network["statemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "statemon_N_2.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
 
         
         # ===================================== 予測ラベルと正解ラベルをテキストで保存 ===================================
@@ -152,7 +158,7 @@ class Validator():
             for idx in wronged_image_idx:
                 f.write(f"Image {idx}: {self.labels[idx]} -> {predict_labels[idx]}\n")
         
-        # ===================================== 不正解画像を保存 ===================================
+        # ===================================== 不正解画像���保存 ===================================
         for idx in wronged_image_idx:
             plt.imsave(self.target_path + f"/VALIDATING/{validation_name}/wrong_images/class_{self.labels[idx]}/wrong_image_{idx}.png", self.images[idx], cmap="gray")
             

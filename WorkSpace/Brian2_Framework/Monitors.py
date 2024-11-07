@@ -6,6 +6,8 @@ import numpy as np
 from brian2 import *
 import pickle as pkl
 
+
+
 class SpikeMonitorData():
     """
     SpikeMonitorのデータを保存するためのクラス
@@ -21,6 +23,19 @@ class SpikeMonitorData():
         # spike_trainsはweakrefを含むため、必要なデータのみ抽出
         self.spike_trains = {i: np.array(trains) for i, trains in monitor.spike_trains().items()}
         self.num_spikes = monitor.num_spikes
+        
+    def extend(self, monitor):
+        """
+        モニターのデータを結合します。
+
+        Args:
+            monitor (SpikeMonitor or StateMonitor): 結合するモニター
+        """
+        self.i = np.concatenate([self.i, monitor.i])
+        self.t = np.concatenate([self.t, monitor.t])
+        self.count = np.concatenate([self.count, monitor.count])
+        self.spike_trains = {**self.spike_trains, **monitor.spike_trains}
+        self.num_spikes = self.num_spikes + monitor.num_spikes
 
 class StateMonitorData():
     """
@@ -44,3 +59,11 @@ class StateMonitorData():
                 self.__dict__[var] = data  # データを属性として保存
             except AttributeError:
                 print(f"[WARNING] {var} は {monitor.name} に存在しません。このパラメータは保存されません。")
+                
+    def extend(self, monitor):
+        """
+        モニターのデータを結合します。
+        """
+        self.t = np.concatenate([self.t, monitor.t])
+        for var in self.record_variables:
+            self.__dict__[var] = np.concatenate([self.__dict__[var], getattr(monitor, var)])

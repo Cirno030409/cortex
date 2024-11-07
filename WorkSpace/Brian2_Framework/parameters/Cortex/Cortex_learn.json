@@ -1,5 +1,6 @@
 {
-    "n_samples": 1000,
+    "n_samples": 5000,
+    "enable_monitor": true,
     "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
@@ -9,7 +10,6 @@
     "record_interval": 50,
     "seed": 1,
     "network_type": "Cortex",
-    "mini_column_params_path": "Brian2_Framework/parameters/A_Mini_column/A_Mini_column_learn.json",
     "neuron_params_e": {
         "I_noise": 0,
         "tauge": "1*ms",

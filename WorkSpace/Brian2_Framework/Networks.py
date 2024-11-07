@@ -90,10 +90,9 @@ class Diehl_and_Cook_WTA(Network_Frame):
         disable_learning(): 学習を無効にします。\n
         change_image(image:np.ndarray, spontaneous_rate:int=0): 入力画像を変更します。
     """
-    def __init__(self, enable_monitor:bool, params_json_path:str):
+    def __init__(self, enable_monitor:bool, params:dict):
         # Make instances of neurons and synapses
         super().__init__()
-        params = tools.load_parameters(params_json_path)
         
         self.obj = {} # ネットワークのオブジェクトを格納する辞書
 
@@ -216,11 +215,11 @@ class Mini_Column(Network_Frame):
         connect_neurons(neuron_group:NeuronGroup, object_name:str, stdp_or_normal:str, param_name:str, connect:bool=True): ニューロングループを接続します。
     """
 
-    def __init__(self, enable_monitor:bool, params_json_path:str, column_id:int):
+    def __init__(self, enable_monitor:bool, params:dict, column_id:int):
         super().__init__()
         self.column_id = column_id
         self.enable_monitor = enable_monitor
-        self.params = tools.load_parameters(params_json_path) # パラメータを読み込む
+        self.params = params # パラメータを読み込む
         
         self.obj = {} # ネットワークのオブジェクトを格納する辞書
 
@@ -229,7 +228,7 @@ class Mini_Column(Network_Frame):
         self.obj["N_2"] = Conductance_LIF_Neuron(self.params["n_i"], self.params["neuron_params_i"], name=f"mc{column_id}_N_2")
 
         # 興奮性結合
-        # self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], exc_or_inh="exc", name=f"mc{column_id}_S_1", connect="i==j", params=self.params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
+        self.obj["S_1"] = Normal_Synapse(self.obj["N_1"], self.obj["N_2"], exc_or_inh="exc", name=f"mc{column_id}_S_1", connect="i==j", params=self.params["static_synapse_params_ei"]) # 興奮ニューロンから抑制ニューロン
 
         # 抑制性結合
         self.obj["S_2"] = Normal_Synapse(self.obj["N_2"], self.obj["N_1"], exc_or_inh="inh", name=f"mc{column_id}_S_2", connect=f"i!=j", params=self.params["static_synapse_params_ie"]) # 側抑制
@@ -241,8 +240,8 @@ class Mini_Column(Network_Frame):
         if self.enable_monitor:
             self.network.add(
                 SpikeMonitor(self.obj["N_2"], record=True, name=f"mc{column_id}_spikemon_N_2"),
-                StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
-                StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
+                # StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
+                # StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
             )
         self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_for_assign")) # ラベル割当に必要
 
@@ -284,10 +283,10 @@ class Cortex(Network_Frame):
         enable_monitor (bool): モニタリングを有効にするか\n
         params_json_path (str): パラメータを保存したJSONファイルのパス
     """
-    def __init__(self, enable_monitor:bool, params_json_path:str):
+    def __init__(self, enable_monitor:bool, params_cortex:dict, params_mc:dict):
         super().__init__()
         self.enable_monitor = enable_monitor
-        self.params = tools.load_parameters(params_json_path)
+        self.params = params_cortex
         
         self.obj = {} # ネットワークのオブジェクトを格納する辞書
         self.columns = {} # ミニカラムのリスト
@@ -299,7 +298,7 @@ class Cortex(Network_Frame):
         
         # ミニカラムを作成して入力層と接続
         for i in range(self.params["n_mini_column"]):
-            self.columns[i] = Mini_Column(self.enable_monitor, self.params["mini_column_params_path"], column_id=i) # ミニカラムを作成
+            self.columns[i] = Mini_Column(self.enable_monitor, params_mc, column_id=i) # ミニカラムを作成
             self.columns[i].connect_neurons(self.obj["N_inp"], connect_to="N_1", stdp_or_normal="stdp", exc_or_inh="exc", syn_name="S_0", param_name="stdp_synapse_params", connect=True) # 接続
         
         
