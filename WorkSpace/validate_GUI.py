@@ -27,7 +27,7 @@ class ValidatorGUI:
         self.lb1 = tk.Label(self.dir_drop_frame, text="Drop network directory or params json file here!", bg="lightgreen", font=("Arial", 17, "bold"))
         self.lb1.place(relx=0.5, rely=0.5, anchor="center")
 
-        # 設定フレーム
+        # 設定レーム
         self.setting_frame = tk.Frame(self.root, bg="lightgray", relief="groove", borderwidth=2)
         self.setting_frame.pack(fill="both", expand=True)
         
@@ -74,17 +74,21 @@ class ValidatorGUI:
         np.random.seed(self.params["seed"])
         
         self.root.withdraw() # メインウィンドウを非表示にする
+        # JSONパラメータ表示ウィンドウを閉じる
+        for window in self.root.winfo_children():
+            if isinstance(window, tk.Toplevel):
+                window.destroy()
         
         validator = Validator(
             target_path=self.network_dir,
             assigned_labels_path=f"{self.network_dir}/assigned_labels.pkl",
-            params_json_path=self.params_path,
+            params=self.params,
             network_type=self.params["network_type"],
             enable_monitor=self.params["enable_monitor"]
         )
         
         validator.validate(n_samples=self.params["n_samples"], examination_name=self.validation_name.get())
-        tk.messagebox.showinfo("Success", "Validation completed!")
+        tk.messagebox.showinfo("Success", "Validation completed!\n\nvalidation name: " + self.validation_name.get())
 
     def handle_drop(self, event):
         self.handle_path(event.data)
@@ -96,9 +100,45 @@ class ValidatorGUI:
             self.params_path = path
             self.params = tools.load_parameters(path)
             self.loaded_params.config(text=os.path.basename(path))
+            self.show_json_content()
         else:
             self.network_dir = path
             self.loaded_dir.config(text=os.path.basename(path))
+
+    def show_json_content(self):
+        # 新しいウィンドウを作成
+        json_window = tk.Toplevel(self.root)
+        json_window.title("JSON Parameters")
+        json_window.geometry("600x400")
+
+        # テキストウィジェットを作成してJSONの内容を表示
+        text_widget = tk.Text(json_window, wrap=tk.WORD)
+        text_widget.pack(fill=tk.BOTH, expand=True)
+
+        # スクロールバーを追加
+        scrollbar = tk.Scrollbar(json_window)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # スクロールバーとテキストウィジェットを連動
+        text_widget.config(yscrollcommand=scrollbar.set)
+        scrollbar.config(command=text_widget.yview)
+
+        def convert_quantities(obj):
+            if hasattr(obj, 'dimensions'):  # Quantityオブジェクトの場合
+                return str(obj)
+            elif isinstance(obj, dict):  # 辞書の場合
+                return {key: convert_quantities(value) for key, value in obj.items()}
+            elif isinstance(obj, list):  # リストの場合
+                return [convert_quantities(item) for item in obj]
+            return obj
+
+        # パラメータを再帰的に変換
+        params_display = convert_quantities(self.params)
+
+        # JSONの内容を整形して表示
+        formatted_json = json.dumps(params_display, indent=4, ensure_ascii=False)
+        text_widget.insert(tk.END, formatted_json)
+        text_widget.config(state=tk.DISABLED)  # 読み取り専用に設定
 
 def main():
     app = ValidatorGUI()

@@ -134,6 +134,10 @@ class Common_Plotter:
         
         # プロットする変数リストを整理
         plot_vars = []
+        if has_Ie:
+            plot_vars.append(("Ie", ["Ie"]))
+        if has_Ii:
+            plot_vars.append(("Ii", ["Ii"]))
         if has_Ie or has_Ii:
             plot_vars.append(("I", ["Ie", "Ii"]))
             if has_Ie and has_Ii:  # 両方存在する場合は和も追加
@@ -202,6 +206,9 @@ class Common_Plotter:
             # データが存在する場合のみ軸の範囲を設定
             if has_valid_data:
                 margin = (y_max - y_min) * 0.1
+                if abs(y_max - y_min) < 1e-10:  # 値がほぼ同じ場合
+                    y_min -= 0.1
+                    y_max += 0.1
                 ax.set_ylim(y_min - margin, y_max + margin)
             else:
                 # データが存在しない場合はデフォルトの範囲を設定
@@ -266,7 +273,7 @@ class Common_Plotter:
             n_post (int): 後のニューロンの数
             save_fig (bool): フィグを保存するかどうか
             save_path (str): フィグを保存するパス
-            n_this_fig (int): このフィグの番号（保存する際のファイル名になる)
+            n_this_fig (int): このフィグの番号（保存する��のファイル名にな��)
             assigned_labels (list): 割り当てられたラベルのリスト
         """
         # synapse.w[neuron_idx][time_idx]
@@ -332,7 +339,9 @@ class Common_Plotter:
             end_time (float): 終了時間
             save_fig (bool): フィグを保存するかどうか
             save_path (str): フィグを保存するパス
-            n_this_fig (int): このフィグの番号（保存する際のファイル名になる)
+            n_this_fig (int): のフィグの番号（保存する際のファイル名になる)
+        Returns:
+            heatmap_data (np.ndarray): 発火率のヒートマップのデータ
         """
 
         firing_rates = tools.get_firing_rate(spikemon, start_time, end_time, mode="count")
@@ -355,10 +364,100 @@ class Common_Plotter:
         plt.ylabel('Neuron Index')
         
         if save_path is not None:
-            plt.savefig(f'{save_path}{n_this_fig}_count_heatmap.png', dpi=300, bbox_inches='tight')
+            plt.savefig(os.path.join(save_path, f'{n_this_fig}_count_heatmap.png'), dpi=300, bbox_inches='tight')
         else:
             plt.show()
         
         plt.clf()
         plt.close()
+        
+        return heatmap_data
+    
+    def visualize_wta_response(self, input_image, synapse, spike_indices, save_path=None, n_this_fig=None):
+        """
+        Parameters:
+        -----------
+        input_image : np.array (height, width)
+            入力画像
+        weights : VariableView or np.array
+            各ニューロンの重み
+        spike_indices : np.array
+            発��したニューロンのインデックス配列
+        time_window : float
+            観察時間窓
+        """
+        n_i = synapse.N_incoming_post[0]
+        n_j = synapse.N_outgoing_pre[0]
+        
+        weight_mat = np.zeros((n_i, n_j))
+        for i, j, w in zip(synapse.i, synapse.j, synapse.w):
+            weight_mat[i, j] = w
+        # VariableViewをNumPy配列に変換
+        weights = np.array(weight_mat)
+
+        # スパイクカウントの計算
+        n_neurons = n_j
+        spike_counts = np.zeros(n_neurons)
+        unique, counts = np.unique(spike_indices, return_counts=True)
+        spike_counts[unique] = counts
+        
+        # 上位5位までのニューロンを特定
+        top_5_winners = np.argsort(spike_counts)[::-1][:5] if len(spike_counts) > 0 else [0] * 5
+        
+        # プロットのサイズを調整
+        fig = plt.figure(figsize=(15, 12))
+        gs = plt.GridSpec(5, 5, figure=fig)
+        
+        # 1. 入力画像 (左上)
+        ax_input = fig.add_subplot(gs[0, 0])
+        ax_input.imshow(input_image, cmap='gray')
+        ax_input.set_title('Input Image')
+        ax_input.axis('off')
+        
+        # 2. 上位5位のニューロンの重み (右側)
+        for i, winner in enumerate(top_5_winners):
+            ax = fig.add_subplot(gs[i, 1])
+            winner_weights = weights[:, winner].reshape((int(np.sqrt(n_i)), int(np.sqrt(n_i))))
+            ax.imshow(winner_weights, cmap='gray')
+            ax.set_title(f'#{i+1} Neuron(#{winner})\nSpike Count: {spike_counts[winner]:.0f}')
+            ax.axis('off')
+        
+        # 3. 1位のニューロンの重みと入力の重なり (左中央)
+        for i, winner in enumerate(top_5_winners): 
+            ax = fig.add_subplot(gs[i, 2])
+            winner_weights = weights[:, winner].reshape((int(np.sqrt(n_i)), int(np.sqrt(n_i))))
+            overlap = input_image * winner_weights
+            ax.imshow(overlap, cmap='coolwarm')
+            ax.set_title(f'#{i+1} Neuron(#{winner})\nOverlap of Input and Weight\n(Red: Positive, Blue: Negative)')
+            ax.axis('off')
+        
+        # 4. スパイク発火頻度 (左下)
+        ax_spikes = fig.add_subplot(gs[1:4, 3:5])
+        bar_colors = ['gray'] * n_neurons  # デフォルトは全てグレー
+
+        # 上位5位のニューロンの色を設定
+        colors = ['red', 'orange', 'yellow', 'green', 'blue']
+        for winner, color in zip(top_5_winners, colors):
+            bar_colors[winner] = color
+
+        # 色分けされた棒グラフを描画
+        bars = ax_spikes.bar(range(n_neurons), spike_counts, color=bar_colors)
+        ax_spikes.set_title('Spike Count per Neuron')
+        ax_spikes.set_xlabel('Neuron ID')
+        ax_spikes.set_xticks(np.arange(0, n_neurons+1, 10))
+        ax_spikes.set_ylabel('Spike Count')
+
+        # 凡例を追加
+        legend_elements = [plt.Rectangle((0,0),1,1, color=color, label=f'#{i+1} Winner (Neuron #{winner})')
+                          for i, (winner, color) in enumerate(zip(top_5_winners, colors))]
+        ax_spikes.legend(handles=legend_elements)
+
+        plt.tight_layout()
+        
+        if save_path is not None:
+            os.makedirs(save_path, exist_ok=True)
+            plt.savefig(os.path.join(save_path, f'wta_response_{n_this_fig}.png'))
+            plt.close()
+        
+        return fig
         

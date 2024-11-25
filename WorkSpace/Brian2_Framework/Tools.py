@@ -14,22 +14,73 @@ import re
 from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
 from brian2 import SpikeMonitor
 
-def normalize_weight(synapse, goal_sum_weight, n_i, n_j):
+def print_simulation_start():
     """
-    重みの合計値がgoal_sum_weightになるように正規化する
+    シミュレーション開始時のメッセージを表示する
+    """
+    print("\n\n\n########################################################################################")
+    print("#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                             Simulation has started!                                  #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"########################################################################################")
+    
+def print_validation_start():
+    """
+    検証開始時のメッセージを表示する
+    """
+    print("\n\n\n########################################################################################")
+    print("#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                             Validation has started!                                  #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"#                                                                                      #")
+    print(f"########################################################################################")
 
+def normalize_weight(synapse, value=None, value2=None, method:str="sum") -> None:
+    """
+    重みを正規化します。methodには"sum", "sum_square", "max"を指定します。
+    
+    method:sum -> 重みの合計値がvalueになるように正規化
+    method:sum_square -> 重みの二乗の合計値がvalueになるように正規化
+    method:minmax -> 重みの最小値と最大値をそれぞれvalue, value2になるように正規化
+    method:minus -> すべての重みからvalueを減算し，最小値が-valueになるように正規化
     Args:
         synapses (Synapses): Synapsesオブジェクトのリスト
 
     Returns:
         None
     """
+    n_i = synapse.N_incoming_post[0]
+    n_j = synapse.N_outgoing_pre[0]
     connections = np.zeros((n_i, n_j))
     connections[synapse.i, synapse.j] = synapse.w
-    col_sum = np.sum(connections, axis=0)
-    col_factor = goal_sum_weight / col_sum
-    for i in range(n_j):
-        connections[:, i] *= col_factor[i]
+    
+    if method == "sum":
+        col_sum = np.sum(connections, axis=0)
+        col_factor = value / col_sum
+        for i in range(n_j):
+            connections[:, i] *= col_factor[i]
+    elif method == "sum_square":
+        col_sum = np.sum(connections, axis=0)**2
+        col_factor = value / col_sum #!
+        for i in range(n_j):
+            connections[:, i] *= col_factor[i]
+    elif method == "minmax":
+        col_max = np.max(connections, axis=0)
+        col_min = np.min(connections, axis=0)
+        col_range = col_max - col_min
+        col_range[col_range == 0] = 1
+    elif method == "minus":
+        connections -= value
+
+    else:
+        raise ValueError("methodには'sum', 'sum_square', 'max'のいずれかを指定してください。")
     synapse.w = connections[synapse.i, synapse.j]
         
 def make_gif(fps=20, inp_dir="", out_dir="", out_name="output.gif"):
@@ -183,6 +234,26 @@ def change_dir_name(dir_path, add_name):
     print(f"[INFO] ディレクトリ名を {new_save_path} に変更しました。")
     return new_save_path
 
+def copy_directory(src_dir, dst_dir):
+    """
+    ディレクトリを再帰的にコピーする関数
+    
+    Args:
+        src_dir (str): コピー元ディレクトリパス
+        dst_dir (str): コピー先ディレクトリパス
+    """
+    if not os.path.exists(dst_dir):
+        os.makedirs(dst_dir)
+    
+    for item in os.listdir(src_dir):
+        src_path = os.path.join(src_dir, item)
+        dst_path = os.path.join(dst_dir, item)
+        
+        if os.path.isdir(src_path):
+            copy_directory(src_path, dst_path)
+        else:
+            shutil.copy2(src_path, dst_path)
+
 def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=False, mode:str="rate"):
     """
     スパイクモニターからニューロンごとの発火率を取得する
@@ -255,7 +326,7 @@ def load_parameters(file_path:str):
 
 def save_parameters(save_path:str, parameters:dict):
     """
-    JSONファイルにパラメータを保存します。Brian2の単位変換も行います。
+    JSONファイルにパラメータを保存します。Brian2の単位変換も���います。
 
     Args:
         save_path (str): ディレクトリのパス

@@ -16,17 +16,24 @@ import os
 import seaborn as sns
 import Brian2_Framework.Plotters as Plotters
 from datetime import datetime as dt
+from Brian2_Framework.Plotters import Common_Plotter
+import plotly.graph_objects as go
+import plotly.io as pio
+import shutil
+import matplotlib
+import time
+matplotlib.use("Agg")
 class Validator():
     """
     既存のネットワークを使ってAccuracyを計算するためのクラス
     """
-    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params_json_path:str, enable_monitor:bool=False):
+    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params:dict, enable_monitor:bool=False):
         """
         ネットワークでAccuracyを計算するValidatorを作成します。
 
         Args:
             target_path (str): 重みを読み込んだり，結果を保存するディレクトリのパス
-            assigned_labels_path (str): 割り当てられたラベルを保存した��ス
+            assigned_labels_path (str): 割り当てられたラベルを保存したス
             network_type (str): ネットワークの種類
             params_json_path (str): ネットワークのパラメータを保存したjsonファイルのパス
             
@@ -36,7 +43,7 @@ class Validator():
         """
         self.target_path = target_path
         self.weight_path = os.path.join(target_path, "weights.npy")
-        self.params = tools.load_parameters(params_json_path)
+        self.params = params
         self.network_type = network_type
         self.enable_monitor = enable_monitor
         if network_type == "WTA":
@@ -67,15 +74,15 @@ class Validator():
             predicted_labels (list): 予測されたラベルのリスト
         """
         predicted_labels = []
-        interval = interval / ms
+        self.interval = interval / ms
         self.spikes_list = list(zip(self.model.network["spikemon_for_assign"].i, self.model.network["spikemon_for_assign"].t)) # スパイクモニターからスパイクのリストを作成
         self.spike_cnt4all = np.zeros((len(self.labels), n_neuron))
         # spike_cnt4all[image_idx][neuron_idx]
         for n, label in tqdm(enumerate(self.labels), desc="assigning labels", total=len(self.labels), dynamic_ncols=True):
             # spike_cnt = np.zeros((n_neuron)) # 一つの入力画像に対するスパイク数をカウント
             # 呈示時間を計算
-            start_time = n * interval
-            end_time = (n + 1) * interval
+            start_time = n * self.interval
+            end_time = (n + 1) * self.interval
             # interval内のニューロン別のスパイク数をカウント
             
             neuron_idx = [spike[0] for spike in self.spikes_list if start_time <= spike[1]/ms < end_time] # インターバル内に発火したニューロンidxのリスト
@@ -100,44 +107,155 @@ class Validator():
         """
         self.images, self.labels = mnist.get_mnist_sample_equality_labels(n_samples, "test")
         
-        # ===================================== ネットワークの実行 ==========================================
-        print("[PROCESS] Validating...")
-        print("[INFO] validation name:", examination_name)
+        tools.print_validation_start()
+        print("\n[INFO] validation name:", examination_name)
         print("[INFO] object directory:", self.target_path)
+        pltr = Common_Plotter()
+        if os.path.exists(os.path.join(self.target_path, "VALIDATING", "graphs")):
+            while True:
+                try:
+                    shutil.rmtree(os.path.join(self.target_path, "VALIDATING", "graphs"))
+                    break
+                except Exception as e:
+                    print(e)
+                    print("２秒後に再試行...")
+                    time.sleep(2) # 待機して再試行
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", "graphs"))
+        cnt_fr_nonzero = np.zeros((n_samples)) # 発火率が0でないニューロンの数を入力画像ごとにカウント
+        
+        #! ================================= ネットワークの実行 =================================
         for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
             self.model.set_input_image(self.images[i], self.params["spontaneous_rate"])
             self.model.run(self.params["exposure_time"])
             self.model.reset()
+
+            # ヒートマップ
+            if self.enable_monitor:
+                os.makedirs(os.path.join(self.target_path, "VALIDATING", "graphs", "heatmap"), exist_ok=True)
+                heatmap_data = pltr.firing_rate_heatmap(spikemon=self.model.network["spikemon_for_assign"], 
+                                        start_time=self.params["exposure_time"]*i, 
+                                        end_time=self.params["exposure_time"]*(i+1), 
+                                        save_path=os.path.join(self.target_path, "VALIDATING", "graphs", "heatmap"), 
+                                        n_this_fig=i)
+                cnt_fr_nonzero[i] = np.sum(np.where(heatmap_data != 0, 1, 0))
+                
+            # 勝者ニューロンの可視化
+            os.makedirs(os.path.join(self.target_path, "VALIDATING", "graphs", "wta_response"), exist_ok=True)
+            pltr.visualize_wta_response(self.images[i], self.model.network["S_0"], self.model.network["spikemon_for_assign"].i, save_path=os.path.join(self.target_path, "VALIDATING", "graphs", "wta_response"), n_this_fig=i)
         
             
-        # ===================================== ラベルの予測と精度の算出 ===================================
+        # ============================= ラベルの予測と精度の算出 =============================
         predict_labels = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=10)
         acc = np.sum(self.labels == predict_labels) / len(self.labels)
         
         if examination_name is None:
             validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "validated_acc=" + f"{acc*100:.2f}%"
         else:
-            validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "validated_acc=" + f"{acc*100:.2f}%_" + examination_name
+            validation_name = dt.now().strftime("%Y_%m_%d_%H_%M_%S_") + "_acc=" + f"{acc*100:.2f}%_" + examination_name
         
         # labels : 画像のラベル
         # predict_labels : 予測されたラベル
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name), exist_ok=True)
         print("acc:", acc)
-
-
-        # ===================================== ディレクトリの作成 ===================================
-        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "wrong_images"), exist_ok=True)
-        for i in range(10):
-            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, f"wrong_images/class_{i}"), exist_ok=True)
-        for i in range(10):
-            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, f"top 10 wrong weights against each image/class_{i}"), exist_ok=True)
-        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "top 10 images neurons fire"), exist_ok=True)
-        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs"), exist_ok=True)
-        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "monitors"), exist_ok=True)
+        
+        # =================== 発火率が0でないニューロンの数をプロット ===================
+        if self.enable_monitor:
+            plt.figure(figsize=(10, 8))
+            plt.bar(range(len(self.labels)), cnt_fr_nonzero, color="black")
+            plt.xticks(range(len(self.labels)), self.labels)
+            # 発火数の平均値を計算
+            mean_firing = np.mean(cnt_fr_nonzero)
+            
+            # 平均値を示す水平線を追加
+            plt.axhline(y=mean_firing, color='r', linestyle='--', label=f'Mean: {mean_firing:.2f}')
+            plt.legend()
+            
+            plt.title("Number of Neurons that Fired")
+            plt.xlabel("Input Image Label")
+            plt.ylabel("Number of Neurons")
+            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "fr_nonzero"), exist_ok=True)
+            plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "fr_nonzero", "fr_nonzero.png"))
+            plt.close()
+        
+        # =================== Winnerニューロンとnot winnerニューロンの入力電流のプロット ===================
+        if self.enable_monitor:
+            for i, image_idx in tqdm(enumerate(range(n_samples)), desc="plotting winner and not winner neuron currents", total=n_samples, dynamic_ncols=True):
+                winner_neuron_idx = np.argmax(self.spike_cnt4all[image_idx])
+                not_winner_neuron_idxs = np.argsort(self.spike_cnt4all[image_idx])[::-1]
+                start_time = i * self.interval
+                end_time = (i + 1) * self.interval
                 
-        tools.save_parameters(self.target_path + f"/VALIDATING/{validation_name}/validation_params.json", self.params)
+                # winner neuronの電流を取得
+                winner_Ie = np.mean(self.model.network["statemon_N_1"].Ie[winner_neuron_idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)])
+                winner_Ii = np.mean(self.model.network["statemon_N_1"].Ii[winner_neuron_idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)])
+                
+                # not winner neuronの電流を取得（上位5位を除く）
+                not_winner_Ie = []
+                not_winner_Ii = []
+                for idx in not_winner_neuron_idxs[5:]:
+                    not_winner_Ie.append(np.mean(self.model.network["statemon_N_1"].Ie[idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)]))
+                    not_winner_Ii.append(np.mean(self.model.network["statemon_N_1"].Ii[idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)]))
+                
+                not_winner_Ie = np.mean(not_winner_Ie)
+                not_winner_Ii = np.mean(not_winner_Ii)
+                
+                # プロット
+                fig, ax1 = plt.subplots(figsize=(10, 8))
+                ax2 = ax1.twinx()  # 2つ目のy軸を作成
+                
+                # バーの位置を設定
+                x = np.array([0, 1])
+                width = 0.35
+                
+                # 興奮性電流（Ie）のプロット
+                rects1 = ax1.bar(x - width/2, [winner_Ie, not_winner_Ie], width, 
+                                color="red", alpha=0.6, label="Excitatory (Ie)")
+                
+                # 抑制性電流（Ii）のプロット（正の値のまま表示）
+                rects2 = ax2.bar(x + width/2, [winner_Ii, not_winner_Ii], width,
+                                color="blue", alpha=0.6, label="Inhibitory (Ii)")
+                
+                # 軸の設定
+                ax1.set_ylabel("Excitatory Current (pA)", color="red")
+                ax2.set_ylabel("Inhibitory Current (pA)", color="blue")
+                ax1.tick_params(axis='y', labelcolor="red")
+                ax2.tick_params(axis='y', labelcolor="blue")
+                
+                # y軸の最大値の設定
+                _, y_max = ax1.get_ylim()
+                y_min, _ = ax2.get_ylim()
+                y_max = max(y_max, -y_min)
+                
+                ax1.set_ylim(0, y_max)
+                ax2.set_ylim(0, -y_max)  # 上限と下限を逆にして設定
+                
+                # x軸のラベル
+                plt.xticks(x, ["Winner", "Not Winner"])
+                
+                # タイトルと凡例
+                ax1.set_title(f"Current Comparison (Image {image_idx}, Label {self.labels[image_idx]})")
+                lines1, labels1 = ax1.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+                
+                # グリッドの追加（主軸のみ）
+                ax1.grid(True, linestyle='--', alpha=0.7)
+                
+                plt.tight_layout()
+                
+                # 保存
+                os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "currents"), exist_ok=True)
+                plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "currents", f"current_comparison_{image_idx}.png"))
+                plt.close()
+
+
+        # validationパラメータを保存
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name), exist_ok=True)
+        tools.save_parameters(os.path.join(self.target_path, "VALIDATING", validation_name, "validation_params.json"), self.params)
             
         # モニターを保存
         if self.enable_monitor:
+            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "monitors"), exist_ok=True)
             if self.network_type == "WTA":
                 tools.save_monitor(self.model.network["spikemon_inp"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "spikemon_inp.pkl"))
                 tools.save_monitor(self.model.network["spikemon_N_1"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "spikemon_N_1.pkl"))
@@ -146,9 +264,10 @@ class Validator():
                 tools.save_monitor(self.model.network["statemon_N_2"], os.path.join(self.target_path, "VALIDATING", validation_name, "monitors", "statemon_N_2.pkl"), ["v", "Ie", "Ii", "ge", "gi"])
 
         
-        # ===================================== 予測ラベルと正解ラベルをテキストで保存 ===================================
+        # =================== 予測ラベルと正解ラベルをテキストで保存 ===================
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name), exist_ok=True)
         wronged_image_idx = list(np.where(self.labels != predict_labels)[0]) # 不正解画像のインデックスを取得
-        with open(f"{self.target_path}/VALIDATING/{validation_name}/result.txt", "w") as f:
+        with open(os.path.join(self.target_path, "VALIDATING", validation_name, "result.txt"), "w") as f:
             f.write(f"Accuracy: {acc*100}%\n")
             f.write("\n[Answer labels -> Predict labels]\n")
             for i in range(len(self.labels)):
@@ -158,11 +277,13 @@ class Validator():
             for idx in wronged_image_idx:
                 f.write(f"Image {idx}: {self.labels[idx]} -> {predict_labels[idx]}\n")
         
-        # ===================================== 不正解画像���保存 ===================================
+        # ========================== 不正解画像を保存 ==========================
+        for i in range(10):
+            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "wrong_images", f"class_{i}"), exist_ok=True)
         for idx in wronged_image_idx:
-            plt.imsave(self.target_path + f"/VALIDATING/{validation_name}/wrong_images/class_{self.labels[idx]}/wrong_image_{idx}.png", self.images[idx], cmap="gray")
+            plt.imsave(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "wrong_images", f"class_{self.labels[idx]}", f"wrong_image_{idx}.png"), self.images[idx], cmap="gray")
             
-        # ===================================== 予測ラベルと正解ラベルのConfusion Matrixを保存 ===================================
+        # ================ 予測ラベルと正解ラベルのConfusion Matrixを保存 ================
         confusion_matrix = np.zeros((10, 10))
         for i in range(len(self.labels)):
             confusion_matrix[self.labels[i]][predict_labels[i]] += 1 # confusion_matrix[正解ラベル][予測ラベル]
@@ -173,12 +294,14 @@ class Validator():
         plt.xlabel('Predicted Label')
         plt.ylabel('True Label')
         plt.tight_layout()
-        plt.savefig(self.target_path + f"/VALIDATING/{validation_name}/graphs/confusion_matrix.png")
+        plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "confusion_matrix.png"))
         plt.close()
         
-        # =============================== 不正解の画像にたいしてどのRFを持つニューロンが発火したかランキングを保存 ===========================
+        # ============= 不正解の画像にたいしてどのRFを持つニューロンが発火したかランキングを保存 =============
             
         # 不正解の画像に対してどのような重みを持つニューロンが発火したかを可視化
+        for i in range(10):
+            os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "top 10 wrong weights against each image", f"class_{i}"), exist_ok=True)
         for idx in tqdm(wronged_image_idx, desc="saving top 10 wrong weights against each image", dynamic_ncols=True):
             spike_counts = self.spike_cnt4all[idx]
             # spike_cnt4all[image_idx][neuron_idx]
@@ -215,10 +338,11 @@ class Validator():
                 axes[row, col].set_title(f"Neuron {neuron_idx}\nSpikes: {spike_counts[neuron_idx]}\nassigned label: {self.assigned_labels[neuron_idx]}")
                 fig.colorbar(im, ax=axes[row, col], fraction=0.046, pad=0.04)
             plt.tight_layout()
-            plt.savefig(f"{self.target_path}/VALIDATING/{validation_name}/top 10 wrong weights against each image/class_{self.labels[idx]}/true_{self.labels[idx]}_predicted_{predict_labels[idx]}_image_{idx}.png")
+            plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "top 10 wrong weights against each image", f"class_{self.labels[idx]}", f"true_{self.labels[idx]}_predicted_{predict_labels[idx]}_image_{idx}.png"))
             plt.close()
             
-        # ================================ 任意のRFがどの画像に対して発火したかランキングを保存 ================================
+        # ================== 任意のRFがどの画像に対して発火したかランキングを保存 ==================
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "top 10 images neurons fire"), exist_ok=True)
         for idx in tqdm(range(self.params["n_e"]), desc="saving top 10 images neurons fire", dynamic_ncols=True):
             spike_counts = self.spike_cnt4all[:, idx]
             # spike_cnt4all[image_idx][neuron_idx]
@@ -238,30 +362,13 @@ class Validator():
                 axes[row, col].axis('off')
                 axes[row, col].imshow(self.images[image_idx], cmap='gray')
             plt.tight_layout()
-            plt.savefig(f"{self.target_path}/VALIDATING/{validation_name}/top 10 images neurons fire/top_10_images_neuron_{idx}.png")
+            plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "top 10 images neurons fire", f"top_10_images_neuron_{idx}.png"))
             plt.close()
             
+        os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "heatmap"), exist_ok=True)
+        tools.copy_directory(os.path.join(self.target_path, "VALIDATING", "graphs"), os.path.join(self.target_path, "VALIDATING", validation_name, "graphs"))
             
-            
-                
-        return acc
-        
-
-
-
-
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
+        if self.enable_monitor:
+            return os.path.join(self.target_path, "VALIDATING", validation_name), mean_firing
+        else:
+            return os.path.join(self.target_path, "VALIDATING", validation_name)

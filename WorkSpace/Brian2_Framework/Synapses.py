@@ -28,13 +28,13 @@ class STDP_Synapse(Synapses):
         if exc_or_inh == "exc":
             self.on_pre = """
                 apre = Apre
-                w = clip(w - apost * nu_post * sw, 0, wmax)
+                w = clip(w - apost * nu_post * sw, wmin, wmax)
                 ge_post += w * g_gain
             """
         elif exc_or_inh == "inh":
             self.on_pre = """
                 apre = Apre
-                w = clip(w - apost * nu_post * sw, 0, wmax)
+                w = clip(w - apost * nu_post * sw, wmin, wmax)
                 gi_post += w * g_gain
             """
         else:
@@ -42,7 +42,7 @@ class STDP_Synapse(Synapses):
 
         self.on_post = """
             apost = Apost
-            w = clip(w + apre * nu_pre * sw, 0, wmax)
+            w = clip(w + apre * nu_pre * sw, wmin, wmax)
         """
         if params is None:
             raise ValueError("シナプス作成時にパラメータの辞書を渡してください。")

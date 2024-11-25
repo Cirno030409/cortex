@@ -52,6 +52,22 @@ class Network_Frame(Network):
         """
         self.network.run(duration)
         
+    def set_params(self, params: dict) -> None:
+        """
+        ネットワークのパラメータを設定します。
+
+        Args:
+            params (dict): キーをパラメータ名、値をパラメータ値とする辞書
+
+        Raises:
+            KeyError: 指定されたパラメータが存在しない場合
+        """
+        for key, value in params.items():
+            try:
+                setattr(self.network, key, value)
+            except AttributeError:
+                raise KeyError(f"パラメータ '{key}' が見つかりません。")
+        
     def reset(self):
         """
         ネットワークをリセットします。
@@ -240,8 +256,8 @@ class Mini_Column(Network_Frame):
         if self.enable_monitor:
             self.network.add(
                 SpikeMonitor(self.obj["N_2"], record=True, name=f"mc{column_id}_spikemon_N_2"),
-                # StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
-                # StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
+                StateMonitor(self.obj["N_1"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_1"),
+                StateMonitor(self.obj["N_2"], ["v",  "Ie", "Ii", "ge", "gi"], record=True, name=f"mc{column_id}_statemon_N_2")
             )
         self.network.add(SpikeMonitor(self.obj["N_1"], record=True, name=f"mc{column_id}_spikemon_for_assign")) # ラベル割当に必要
 
