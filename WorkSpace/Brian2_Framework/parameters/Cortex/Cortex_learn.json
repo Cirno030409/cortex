@@ -1,9 +1,9 @@
 {
     "n_samples": 10000,
     "enable_monitor": false,
-    "learning_labels": [0, 1, 2, 3],
+    "labels": [3, 5, 8, 4, 9],
     "sync_weight_term": 200,
-    "epoch": 2,
+    "epoch": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
     "n_mini_column": 5,

@@ -16,13 +16,14 @@ def get_mnist():
     
     return (img_train, label_train), (img_test, label_test)
 
-def get_mnist_sample(n_samples=1, dataset='train'):
+def get_mnist_sample(n_samples=1, dataset='train', labels:list=None):
     """
     MNISTデータセットからランダムにサンプルを取得します。
 
     Args:
         n_samples (int): 取得するサンプル数
         dataset (str): 'train'または'test'を指定
+        labels (list, optional): 取得するラベルのリスト。Noneの場合は全ラベル(0-9)から取得
 
     Returns:
         tuple: (images, labels)
@@ -37,8 +38,17 @@ def get_mnist_sample(n_samples=1, dataset='train'):
         img, label = img_test, label_test
     else:
         raise ValueError("datasetは'train'または'test'を指定してください。")
+
+    if labels is not None:
+        # 指定されたラベルのインデックスのみを取得
+        valid_indices = np.where(np.isin(label, labels))[0]
+        img = img[valid_indices]
+        label = label[valid_indices]
     
-    indices = np.random.choice(len(img), n_samples, replace=False)
+    try:
+        indices = np.random.choice(len(img), n_samples, replace=False)
+    except:
+        raise ValueError("指定された枚数がMNISTデータセットの枚数を上回っている可能性があります。使用する枚数を再設定してください。")
     return img[indices], label[indices]
 
 def get_mnist_sample_equality_labels(n_samples=1, dataset='train', labels:list=None):
@@ -73,10 +83,13 @@ def get_mnist_sample_equality_labels(n_samples=1, dataset='train', labels:list=N
     imgs = []
     selected_labels = []
     n_img_per_label = n_samples // n_labels
-    
+
     for label in labels:
         indices = np.where(label_data == label)[0]
-        selected_indices = np.random.choice(indices, n_img_per_label, replace=True)
+        try:
+            selected_indices = np.random.choice(indices, n_img_per_label, replace=False)
+        except:
+            raise ValueError("指定された枚数がMNISTデータセットの枚数を上回っている可能性があります。使用する枚数を再設定してください。")
         imgs.extend(img[selected_indices])
         selected_labels.extend([label] * n_img_per_label)
         
@@ -121,7 +134,10 @@ def get_mnist_image(labels, n_samples=1, down_sample=1, dataset='train'):
         indices = np.where(label_data == label)[0]
         
         # 各ラベルに対してn_samples枚の画像をランダムに選択
-        label_indices = np.random.choice(indices, size=min(n_samples, len(indices)), replace=False)
+        try:
+            label_indices = np.random.choice(indices, size=min(n_samples, len(indices)), replace=False)
+        except:
+            raise ValueError("指定された枚数がMNISTデータセットの枚数を上回っている可能性があります。使用する枚数を再設定してください。")
         selected_images.extend(img[label_indices])
         selected_labels.extend(label_data[label_indices])
     

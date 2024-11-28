@@ -1,8 +1,9 @@
 {
-    "n_samples":10000,
+    "n_samples":50,
     "enable_monitor": false,
     "record_interval": 1,
     "epoch": 1,
+    "labels": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     "exposure_time": "150*ms",
     "n_inp": 784,
     "n_e": 100,
@@ -51,7 +52,8 @@
         "nu_post": 0,
         "alpha": 0,
         "sw": 1,
-        "g_gain": 1
+        "ge_gain": 1,
+        "gi_gain": 1
     },
     "static_synapse_params_ei": {
         "w": 30

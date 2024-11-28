@@ -3,6 +3,7 @@
     "epoch": 2,
     "enable_monitor": false,
     "validation": true,
+    "labels": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     "record_interval": 100,
     "exposure_time": "150*ms",
     "n_inp": 784,
@@ -17,7 +18,7 @@
         "tauge": "1*ms",
         "taugi": "2*ms",
         "taum": "50*ms",
-        "theta_dt": 0.05,
+        "theta_dt": 0.1,
         "tautheta": "1e7*ms",
         "v_rev_e": 0,
         "v_rev_i": -100,
@@ -51,7 +52,8 @@
         "nu_post": 0.00005,
         "alpha": 0,
         "sw": 1,
-        "g_gain": 1
+        "ge_gain": 1,
+        "gi_gain": 1
     },
     "static_synapse_params_ei": {
         "w": 30,

@@ -273,7 +273,7 @@ class Common_Plotter:
             n_post (int): 後のニューロンの数
             save_fig (bool): フィグを保存するかどうか
             save_path (str): フィグを保存するパス
-            n_this_fig (int): このフィグの番号（保存する��のファイル名にな��)
+            n_this_fig (int): このフィグの番号（保存するのファイル名にな)
             assigned_labels (list): 割り当てられたラベルのリスト
         """
         # synapse.w[neuron_idx][time_idx]
@@ -373,18 +373,20 @@ class Common_Plotter:
         
         return heatmap_data
     
-    def visualize_wta_response(self, input_image, synapse, spike_indices, save_path=None, n_this_fig=None):
+    def visualize_wta_response(self, input_image, synapse, spikemon, start_time:int, exposure_time:int, save_path=None, n_this_fig=None):
         """
         Parameters:
         -----------
         input_image : np.array (height, width)
             入力画像
-        weights : VariableView or np.array
-            各ニューロンの重み
-        spike_indices : np.array
-            発��したニューロンのインデックス配列
-        time_window : float
-            観察時間窓
+        synapse : SynapseGroup
+            シナプスグループ
+        spikemon : SpikeMonitor
+            スパイクモニター
+        start_time : int
+            開始時間
+        exposure_time : int
+            露光時間
         """
         n_i = synapse.N_incoming_post[0]
         n_j = synapse.N_outgoing_pre[0]
@@ -398,6 +400,10 @@ class Common_Plotter:
         # スパイクカウントの計算
         n_neurons = n_j
         spike_counts = np.zeros(n_neurons)
+        # start_timeからexposure_time経過後までのスパイクのみを集計
+        end_time = start_time + exposure_time
+        spikes = tools.get_spikes_within_time_range(spikemon=spikemon, start_time=start_time, end_time=end_time)
+        spike_indices = [spike[1] for spike in spikes]
         unique, counts = np.unique(spike_indices, return_counts=True)
         spike_counts[unique] = counts
         

@@ -85,22 +85,16 @@ with open(SAVE_PATH + "LEARNING/input image labels.json", "w") as f:
 # ===================================== ラベルの割り当て ==========================================
 print("[PROCESS] Assigning labels to neurons...")
 assigned_labels = tools.assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], 10, all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
-tools.memo_assigned_labels(SAVE_PATH, assigned_labels) # メモ
-tools.save_assigned_labels(SAVE_PATH, assigned_labels) # 保存
+tools.memo_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.txt"), assigned_labels) # メモ
+tools.save_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.pkl"), assigned_labels) # 保存
 weights = model.network["S_0"].w
-np.save(SAVE_PATH + "weights.npy", weights) # 重みを保存(numpy)
+np.save(os.path.join(SAVE_PATH, "weights.npy"), weights) # 重みを保存(numpy)
 if SAVE_WEIGHT_CHANGE_GIF:
     print("[PROCESS] Saving weight change GIF...")
     tools.make_gif(25, SAVE_PATH + "LEARNING/learning weight matrix/", SAVE_PATH, "weight_change.gif") # GIFを保存
     
 plotter.weight_plot(model.network["S_0"], n_pre=params["n_inp"], n_post=params["n_e"], title="weight plot of S0", save_fig=True, save_path=SAVE_PATH, n_this_fig="final_weight_plot", assigned_labels=assigned_labels)
-
-
-
-# ===================================== シミュレーション結果のプロット ==========================================
-if params["enable_monitor"]:
-    # モニターを保存
-    tools.save_all_monitors(os.path.join(SAVE_PATH, "LEARNING", "monitors"), model.network)
+tools.save_all_monitors(os.path.join(SAVE_PATH, "LEARNING", "monitors"), model.network) # モニターを保存
 
 time.sleep(3)
 SAVE_PATH = tools.change_dir_name(SAVE_PATH, "_comp/") # 完了したのでディレクトリ名を変更

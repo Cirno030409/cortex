@@ -249,11 +249,17 @@ def copy_directory(src_dir, dst_dir):
         src_path = os.path.join(src_dir, item)
         dst_path = os.path.join(dst_dir, item)
         
-        if os.path.isdir(src_path):
-            copy_directory(src_path, dst_path)
-        else:
-            shutil.copy2(src_path, dst_path)
-
+        while True:
+            try:
+                if os.path.isdir(src_path):
+                    copy_directory(src_path, dst_path)
+                else:
+                    shutil.copy2(src_path, dst_path)
+                break
+            except Exception as e:
+                print(f"[ERROR] {e}")
+                print("２秒後に再試行...")
+                time.sleep(2)
 def get_firing_rate(spikemon, start_time=None, end_time=None, enable_print:bool=False, mode:str="rate"):
     """
     スパイクモニターからニューロンごとの発火率を取得する
@@ -326,7 +332,7 @@ def load_parameters(file_path:str):
 
 def save_parameters(save_path:str, parameters:dict):
     """
-    JSONファイルにパラメータを保存します。Brian2の単位変換も���います。
+    JSONファイルにパラメータを保存します。Brian2の単位変換もいます。
 
     Args:
         save_path (str): ディレクトリのパス
@@ -341,7 +347,7 @@ def memo_assigned_labels(save_path, assigned_labels):
     """
     ニューロンに割り当てらたラベルを読みやす形でテキストファイルに保存します。
     """
-    with open(save_path + "assigned_labels.txt", "w") as f:
+    with open(save_path, "w") as f:
         f.write("[Assigned labels]\n")
         for i in range(len(assigned_labels)):
             f.write(f"\tneuron {i}: {assigned_labels[i]}\n")
@@ -350,7 +356,7 @@ def save_assigned_labels(save_path, assigned_labels):
     """
     ニューロンに割り当てられたラベルをValidate時に使用するためにpklファイルに保存します。
     """
-    with open(save_path + "assigned_labels.pkl", "wb") as f:
+    with open(save_path, "wb") as f:
         pkl.dump(assigned_labels, f)
 
 # ===================================== モニターデータの保存 ==========================================
@@ -402,6 +408,8 @@ def save_all_monitors(save_path:str, network, index:int=None, compress=True):
     """
     ネットワーク内の全てのモニターを保存する関数。
     indexを指定すると，モニター名のフォルダを作成し，その中に分割したモニターを保存し，モニターをクリアします。
+    モニターがネットワークに含まれていなかった場合は，何も行いません。
+    指定されたパスが存在しなかった場合は，作成します。
     
     Args:
         save_path (str): 保存先のパス

@@ -3,7 +3,7 @@
 """
 from brian2 import *
 import Brian2_Framework.Datasets as mnist
-from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA, Center_Surround_WTA
+from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA, Center_Surround_WTA, Cortex
 import Brian2_Framework.Tools as tools
 from brian2.units import *
 import numpy as np
@@ -27,7 +27,7 @@ class Validator():
     """
     既存のネットワークを使ってAccuracyを計算するためのクラス
     """
-    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params:dict, enable_monitor:bool=False):
+    def __init__(self, target_path:str, assigned_labels_path:str, network_type:str, params:dict, params_mc:dict=None, labels:list=np.arange(10), enable_monitor:bool=False):
         """
         ネットワークでAccuracyを計算するValidatorを作成します。
 
@@ -35,29 +35,42 @@ class Validator():
             target_path (str): 重みを読み込んだり，結果を保存するディレクトリのパス
             assigned_labels_path (str): 割り当てられたラベルを保存したス
             network_type (str): ネットワークの種類
-            params_json_path (str): ネットワークのパラメータを保存したjsonファイルのパス
-            
+            params (dict): ネットワークのパラメータ
+            params_mc (dict): ミニカラムのパラメータ
+            labels (list): テストデータに含まれるラベルのリスト
         Methods:
             validate(self, n_samples:int):
                 ネットワークを実行してValidationを実行します。
         """
         self.target_path = target_path
-        self.weight_path = os.path.join(target_path, "weights.npy")
         self.params = params
         self.network_type = network_type
         self.enable_monitor = enable_monitor
+        self.n_labels = len(labels)
+        self.labels = labels
+        np.random.seed(params["seed"])
         if network_type == "WTA":
             self.model = Diehl_and_Cook_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         elif network_type == "Chunk_WTA":
             self.model = Chunk_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         elif network_type == "WTA_CS":
             self.model = Center_Surround_WTA(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
+        elif network_type == "Cortex":
+            self.model = Cortex(enable_monitor=enable_monitor, params=self.params) # ネットワークを作成
         else:
             raise ValueError("Validation用のネットワークの種類を正しくしてください。:", network_type)
         
-        with open(self.weight_path, "rb") as f: # 重みを読み込む
-            weights = np.load(f)
-        self.model.network["S_0"].w = weights # 重みを復元
+        # 重みを読み込む
+        if network_type == "WTA" or network_type == "Chunk_WTA" or network_type == "WTA_CS":
+            self.weight_path = os.path.join(target_path, "weights.npy")
+            with open(self.weight_path, "rb") as f:
+                weights = np.load(f)
+                self.model.network["S_0"].w = weights # 重みを復元
+        elif network_type == "Cortex":
+            for i in range(len(params_mc["n_mini_column"])):
+                with open(os.path.join(target_path, f"mc{i}_weights.npy"), "rb") as f:
+                    weights = np.load(f)
+                    self.model.network[f"mc{i}_S_0"].w = weights
         self.model.disable_learning() # 学習を無効に
         with open(assigned_labels_path, "rb") as f: # 割り当てられたラベルを読み込む
             self.assigned_labels = pickle.load(f)
@@ -93,19 +106,15 @@ class Validator():
         
         return predicted_labels
     
-    def validate(self, n_samples:int, examination_name:str=None):
+    def validate(self, n_samples=1000, examination_name="test"):
         """
-        検証用のネットワークを実行してAccuracyを計算します。
-        
+        バリデーションを実行します。
+
         Args:
-            n_samples (int): テストデータの数
-        Returns:
-            acc (float): 精度
-            predict_labels (list): 予測されたラベルのリスト
-            answer_labels (list): 正解のラベルのリスト
-            wronged_image_idx (list): 予測が間違えた画像のインデックスのリスト
+            n_samples (int, optional): サンプル数. Defaults to 1000.
+            examination_name (str, optional): 検証名. Defaults to "test".
         """
-        self.images, self.labels = mnist.get_mnist_sample_equality_labels(n_samples, "test")
+        self.images, self.labels = mnist.get_mnist_sample(n_samples, "test", self.labels)
         
         tools.print_validation_start()
         print("\n[INFO] validation name:", examination_name)
@@ -124,7 +133,11 @@ class Validator():
         cnt_fr_nonzero = np.zeros((n_samples)) # 発火率が0でないニューロンの数を入力画像ごとにカウント
         
         #! ================================= ネットワークの実行 =================================
-        for i in tqdm(range(n_samples), desc="simulating", dynamic_ncols=True):
+        for i in tqdm(range(n_samples), 
+                     desc="Simulating", 
+                     bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}',
+                     dynamic_ncols=False,  # 固定幅に
+                     ncols=80):  # 幅を指定):
             self.model.set_input_image(self.images[i], self.params["spontaneous_rate"])
             self.model.run(self.params["exposure_time"])
             self.model.reset()
@@ -141,11 +154,11 @@ class Validator():
                 
             # 勝者ニューロンの可視化
             os.makedirs(os.path.join(self.target_path, "VALIDATING", "graphs", "wta_response"), exist_ok=True)
-            pltr.visualize_wta_response(self.images[i], self.model.network["S_0"], self.model.network["spikemon_for_assign"].i, save_path=os.path.join(self.target_path, "VALIDATING", "graphs", "wta_response"), n_this_fig=i)
+            pltr.visualize_wta_response(self.images[i], synapse=self.model.network["S_0"], spikemon=self.model.network["spikemon_for_assign"], start_time=self.params["exposure_time"]*i, exposure_time=self.params["exposure_time"], save_path=os.path.join(self.target_path, "VALIDATING", "graphs", "wta_response"), n_this_fig=i)
         
             
         # ============================= ラベルの予測と精度の算出 =============================
-        predict_labels = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=10)
+        predict_labels = self._predict_labels(interval=self.params["exposure_time"], n_neuron=self.params["n_e"], n_labels=self.n_labels)
         acc = np.sum(self.labels == predict_labels) / len(self.labels)
         
         if examination_name is None:
@@ -179,6 +192,12 @@ class Validator():
         
         # =================== Winnerニューロンとnot winnerニューロンの入力電流のプロット ===================
         if self.enable_monitor:
+            # 各画像ごとのプロット
+            winner_Ie_all = []
+            winner_Ii_all = []
+            not_winner_Ie_all = []
+            not_winner_Ii_all = []
+            
             for i, image_idx in tqdm(enumerate(range(n_samples)), desc="plotting winner and not winner neuron currents", total=n_samples, dynamic_ncols=True):
                 winner_neuron_idx = np.argmax(self.spike_cnt4all[image_idx])
                 not_winner_neuron_idxs = np.argsort(self.spike_cnt4all[image_idx])[::-1]
@@ -189,6 +208,9 @@ class Validator():
                 winner_Ie = np.mean(self.model.network["statemon_N_1"].Ie[winner_neuron_idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)])
                 winner_Ii = np.mean(self.model.network["statemon_N_1"].Ii[winner_neuron_idx, (start_time < self.model.network["statemon_N_1"].t/ms) & (self.model.network["statemon_N_1"].t/ms < end_time)])
                 
+                winner_Ie_all.append(winner_Ie)
+                winner_Ii_all.append(winner_Ii)
+                
                 # not winner neuronの電流を取得（上位5位を除く）
                 not_winner_Ie = []
                 not_winner_Ii = []
@@ -198,6 +220,9 @@ class Validator():
                 
                 not_winner_Ie = np.mean(not_winner_Ie)
                 not_winner_Ii = np.mean(not_winner_Ii)
+                
+                not_winner_Ie_all.append(not_winner_Ie)
+                not_winner_Ii_all.append(not_winner_Ii)
                 
                 # プロット
                 fig, ax1 = plt.subplots(figsize=(10, 8))
@@ -247,6 +272,57 @@ class Validator():
                 os.makedirs(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "currents"), exist_ok=True)
                 plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "currents", f"current_comparison_{image_idx}.png"))
                 plt.close()
+            
+            # 全画像の平均をプロット
+            fig, ax1 = plt.subplots(figsize=(10, 8))
+            ax2 = ax1.twinx()
+            
+            x = np.array([0, 1])
+            width = 0.35
+            
+            winner_Ie_mean = np.mean(winner_Ie_all)
+            winner_Ii_mean = np.mean(winner_Ii_all)
+            not_winner_Ie_mean = np.mean(not_winner_Ie_all)
+            not_winner_Ii_mean = np.mean(not_winner_Ii_all)
+            
+            # 標準偏差も計算
+            winner_Ie_std = np.std(winner_Ie_all)
+            winner_Ii_std = np.std(winner_Ii_all)
+            not_winner_Ie_std = np.std(not_winner_Ie_all)
+            not_winner_Ii_std = np.std(not_winner_Ii_all)
+            
+            # 平均値のプロット（エラーバー付き）
+            ax1.bar(x - width/2, [winner_Ie_mean, not_winner_Ie_mean], width, 
+                   yerr=[winner_Ie_std, not_winner_Ie_std],
+                   color="red", alpha=0.6, label="Excitatory (Ie)")
+            ax2.bar(x + width/2, [winner_Ii_mean, not_winner_Ii_mean], width,
+                   yerr=[winner_Ii_std, not_winner_Ii_std],
+                   color="blue", alpha=0.6, label="Inhibitory (Ii)")
+            
+            ax1.set_ylabel("Excitatory Current (pA)", color="red")
+            ax2.set_ylabel("Inhibitory Current (pA)", color="blue")
+            ax1.tick_params(axis='y', labelcolor="red")
+            ax2.tick_params(axis='y', labelcolor="blue")
+            
+            _, y_max = ax1.get_ylim()
+            y_min, _ = ax2.get_ylim()
+            y_max = max(y_max, -y_min)
+            
+            ax1.set_ylim(0, y_max)
+            ax2.set_ylim(0, -y_max)
+            
+            plt.xticks(x, ["Winner", "Not Winner"])
+            
+            ax1.set_title("Average Current Comparison (All Images)")
+            lines1, labels1 = ax1.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+            
+            ax1.grid(True, linestyle='--', alpha=0.7)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.target_path, "VALIDATING", validation_name, "graphs", "currents", "current_comparison_average.png"))
+            plt.close()
 
 
         # validationパラメータを保存

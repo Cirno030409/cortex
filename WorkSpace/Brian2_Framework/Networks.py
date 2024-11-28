@@ -270,6 +270,7 @@ class Mini_Column(Network_Frame):
         """
         渡された入力ニューロンをこのミニカラムの指定されたオブジェクトに接続します。
         シナプスの種類と，結合方法を指定できます。JSONファイルに書かれたシナプスのパラメータ名を指定してください。
+        シナプス名はmc{column_id}_{syn_name}となります。
         
         Args:
             source (NeuronGroup): 入力層に接続するニューロングループ

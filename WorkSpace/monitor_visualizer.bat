@@ -1,2 +1,2 @@
 @echo off
-start /B python monitor_visualizer_GUI.py
+start /b pythonw monitor_visualizer_GUI.py

@@ -29,13 +29,13 @@ class STDP_Synapse(Synapses):
             self.on_pre = """
                 apre = Apre
                 w = clip(w - apost * nu_post * sw, wmin, wmax)
-                ge_post += w * g_gain
+                ge_post += w * ge_gain
             """
         elif exc_or_inh == "inh":
             self.on_pre = """
                 apre = Apre
                 w = clip(w - apost * nu_post * sw, wmin, wmax)
-                gi_post += w * g_gain
+                gi_post += w * gi_gain
             """
         else:
             raise ValueError("STDPシナプスを作成するときは，'exc'か'inh'を指定してください。")

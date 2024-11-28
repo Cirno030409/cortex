@@ -12,18 +12,22 @@ OBJECT_DIR = r"C:\Users\taniy\Dropbox\_COLLEGE\_Labolatory\_Study\SNN\Neocortex_
 # OBJECT_DIR = "examined_data/" + "2024_10_21_16_50_48_検証用WTA350ms_comp" + "/"
 VALIDATION_NAME = "monitor_50img_heatmap"
 
-PARAMS_PATH = "Brian2_Framework/parameters/WTA/membrane_tau_50/WTA_validate.json"
+PARAMS_PATH = "Brian2_Framework/parameters/WTA/_main/WTA_validate.json"
 
 
 params = tools.load_parameters(PARAMS_PATH)
 np.random.seed(params["seed"])
+
+# パラメータを固定
+params["enable_monitor"] = True
+params["n_samples"] = 50
 
 
 print("Object directory: ", OBJECT_DIR)
 # ===================================== Validationの実行 ==========================================
 # weights = np.arange(0, 22.5, 0.5)
 # weights = [3.5]
-weights = [22]
+weights = [4.0]
 mean_firing_list = []
 for weight in weights:
     params["static_synapse_params_ei"]["w"] = weight

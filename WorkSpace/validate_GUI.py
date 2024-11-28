@@ -1,5 +1,5 @@
 from tkinterdnd2 import DND_FILES, TkinterDnD
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 from brian2 import *
 import tkinter as tk
 import os
@@ -7,6 +7,14 @@ import json
 from Brian2_Framework.Validator import Validator
 import Brian2_Framework.Tools as tools
 import numpy as np
+import sys
+import traceback
+from tkinter.scrolledtext import ScrolledText
+from tqdm import tqdm
+import io
+import time
+import threading
+import queue
 
 class ValidatorGUI:
     def __init__(self):
@@ -55,12 +63,59 @@ class ValidatorGUI:
         self.bt3 = tk.Button(self.runbutton_frame, text="Run Validation!", font=("Arial", 15, "bold"), command=self.validate, height=2)
         self.bt3.pack(fill="both", expand=True)
 
-    def open_file(self):
-        file_path = filedialog.askopenfilename(
-            title="Open network directory or params json file",
-            filetypes=[("Network directory", ""), ("Params json file", "*.json")]
-        )
-        self.handle_path(file_path)
+        # プログレスバレームを削除し、代わりにログ表示用のテキストエリアを追加
+        self.log_frame = tk.Frame(self.root, bg="lightgray", relief="groove", borderwidth=2)
+        self.log_frame.pack(fill="both", expand=True)
+        
+        self.log_text = ScrolledText(self.log_frame, height=10, bg="black", fg="white")
+        self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # 標準出力をリダイレクト
+        sys.stdout = self.TextRedirector(self.log_text)
+        sys.stderr = self.TextRedirector(self.log_text, "error")
+
+        # メッセージキューを追加
+        self.message_queue = queue.Queue()
+        self.root.after(100, self.process_queue)
+
+    def process_queue(self):
+        """メッセージキューを処理"""
+        try:
+            while True:
+                msg = self.message_queue.get_nowait()
+                if isinstance(msg, Exception):
+                    tk.messagebox.showerror("Error", str(msg))
+                    self.bt3.config(state="normal")
+                elif msg == "COMPLETE":
+                    tk.messagebox.showinfo("Success", "Validation completed!\n\nvalidation name: " + self.validation_name.get())
+                    self.bt3.config(state="normal")
+        except queue.Empty:
+            pass
+        finally:
+            self.root.after(100, self.process_queue)
+
+    def run_validation(self):
+        """別スレッドで実行される検証処理"""
+        try:
+            np.random.seed(self.params["seed"])
+            
+            validator = Validator(
+                target_path=self.network_dir,
+                assigned_labels_path=f"{self.network_dir}/assigned_labels.pkl",
+                params=self.params,
+                network_type=self.params["network_type"],
+                enable_monitor=self.params["enable_monitor"]
+            )
+            
+            validator.validate(
+                n_samples=self.params["n_samples"], 
+                examination_name=self.validation_name.get()
+            )
+            
+            self.message_queue.put("COMPLETE")
+            
+        except Exception as e:
+            self.message_queue.put(e)
 
     def validate(self):
         if not self.network_dir or not self.params_path:
@@ -70,25 +125,21 @@ class ValidatorGUI:
         if not self.validation_name.get():
             tk.messagebox.showerror("Error", "Please enter validation name.")
             return
-            
-        np.random.seed(self.params["seed"])
         
-        self.root.withdraw() # メインウィンドウを非表示にする
-        # JSONパラメータ表示ウィンドウを閉じる
-        for window in self.root.winfo_children():
-            if isinstance(window, tk.Toplevel):
-                window.destroy()
+        # 実行中はボタンを無効化
+        self.bt3.config(state="disabled")
         
-        validator = Validator(
-            target_path=self.network_dir,
-            assigned_labels_path=f"{self.network_dir}/assigned_labels.pkl",
-            params=self.params,
-            network_type=self.params["network_type"],
-            enable_monitor=self.params["enable_monitor"]
+        # 別スレッドで検証を実行
+        thread = threading.Thread(target=self.run_validation)
+        thread.daemon = True  # メインスレッド終了時に一緒に終了
+        thread.start()
+
+    def open_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Open network directory or params json file",
+            filetypes=[("Network directory", ""), ("Params json file", "*.json")]
         )
-        
-        validator.validate(n_samples=self.params["n_samples"], examination_name=self.validation_name.get())
-        tk.messagebox.showinfo("Success", "Validation completed!\n\nvalidation name: " + self.validation_name.get())
+        self.handle_path(file_path)
 
     def handle_drop(self, event):
         self.handle_path(event.data)
@@ -140,7 +191,63 @@ class ValidatorGUI:
         text_widget.insert(tk.END, formatted_json)
         text_widget.config(state=tk.DISABLED)  # 読み取り専用に設定
 
+    class TextRedirector:
+        def __init__(self, widget, tag="stdout"):
+            self.widget = widget
+            self.tag = tag
+            self.buffer = io.StringIO()
+            self.last_update = time.time()
+            self.queue = queue.Queue()
+            widget.after(100, self.process_queue)
+
+        def process_queue(self):
+            """GUIスレッドでテキスト更新を処理"""
+            try:
+                while True:
+                    text = self.queue.get_nowait()
+                    self.widget.configure(state="normal")
+                    
+                    if '\r' in text:
+                        lines = text.split('\r')
+                        text = lines[-1]
+                        
+                        last_line_start = self.widget.index("end-2c linestart")
+                        last_line_end = self.widget.index("end-1c")
+                        if "%" in self.widget.get(last_line_start, last_line_end):
+                            self.widget.delete(last_line_start, last_line_end)
+                    
+                    self.widget.insert("end", text, (self.tag,))
+                    self.widget.see("end")
+                    self.widget.configure(state="disabled")
+            except queue.Empty:
+                pass
+            finally:
+                self.widget.after(100, self.process_queue)
+
+        def write(self, str):
+            self.queue.put(str)
+
+        def flush(self):
+            pass
+
 def main():
+    # ターミナルを非表示にする
+    if sys.platform.startswith('win'):
+        import win32gui
+        import win32con
+        # 現在のプロセスのウィンドウハンドルを取得
+        hwnd = win32gui.GetForegroundWindow()
+        # ウィンドウを非表示に
+        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+        
+        # コマンドプロンプトも非表示に（親プロセスがcmdの場合）
+        try:
+            parent = win32gui.GetParent(hwnd)
+            if parent:
+                win32gui.ShowWindow(parent, win32con.SW_HIDE)
+        except:
+            pass
+    
     app = ValidatorGUI()
     app.root.mainloop()
 
