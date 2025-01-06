@@ -6,6 +6,40 @@ from brian2 import NeuronGroup, PoissonGroup
 from brian2.units import *
 import pprint as pp
 
+class Conductance_LIF_Neuron(NeuronGroup):
+    
+    def __init__(self, N, params=None, *args, **kwargs):
+        if params is None:
+            raise ValueError("ニューロンを作成する際、パラメータを必ず指定する必要があります。")
+        self.params = params
+        self.model = """
+            dv/dt = ((v_rest - v) + (Ie + Ii + I_noise)) / taum : 1 (unless refractory)
+            dge/dt = (-ge)/tauge : 1
+            dgi/dt = (-gi)/taugi : 1
+            dtheta/dt = -theta/tautheta : 1
+            Ie = ge * (v_rev_e - v) : 1
+            Ii = gi * (v_rev_i - v) : 1
+        """
+        super().__init__(N, model=self.model, threshold="v>(v_th + theta)", 
+                         reset="v=v_reset; theta+=theta_dt", refractory="refractory", 
+                         method="euler", namespace=self.params, *args, **kwargs)
+        self.v = self.params["v_reset"]
+        self.ge = 0
+        self.gi = 0
+
+    def change_params(self, params):
+        """
+        ニューロンのパラメータを変更する。
+
+        Args:
+            params (dict): ニューロンのパラメータ
+        """
+        for key, value in params.items():
+            self.params[key] = value  # パラメータ辞書を更新
+        
+        print("Neuron parameters were changed:")
+        for key, value in params.items():
+            print(f"{key}: {value}")
 
 class Conductance_Izhikevich2003(NeuronGroup):
     # NOTE 動作未確認
@@ -44,39 +78,6 @@ class Conductance_Izhikevich2003(NeuronGroup):
         self.ge = 0
         self.gi = 0
     
-class Conductance_LIF_Neuron(NeuronGroup):
-    
-    def __init__(self, N, params=None, *args, **kwargs):
-        if params is None:
-            raise ValueError("ニューロンを作成する際、パラメータを必ず指定する必要があります。")
-        self.params = params
-        self.model = """
-            dv/dt = ((v_rest - v) + (Ie + Ii + I_noise)) / taum : 1 (unless refractory)
-            dge/dt = (-ge)/tauge : 1
-            dgi/dt = (-gi)/taugi : 1
-            dtheta/dt = -theta/tautheta : 1
-            Ie = ge * (v_rev_e - v) : 1
-            Ii = gi * (v_rev_i - v) : 1
-        """
-        super().__init__(N, model=self.model, threshold="v>(v_th + theta)", 
-                         reset="v=v_reset; theta+=theta_dt", refractory="refractory", 
-                         method="euler", namespace=self.params, *args, **kwargs)
-        self.v = self.params["v_reset"]
-        self.ge = 0
-        self.gi = 0
-
-    def change_params(self, params):
-        """
-        ニューロンのパラメータを変更する。
-
-        Args:
-            params (dict): ニューロンのパラメータ
-        """
-        self.set_states(params)
-        print("Neuron parameters were changed:")
-        for key, value in params.items():
-            print(f"{key}: {value}")
-
         
 class Poisson_Input_Neuron(PoissonGroup):
     def __init__(self, N, max_rate:float, *args, **kwargs):

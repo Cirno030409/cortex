@@ -1,0 +1,52 @@
+{
+    "n_samples": 0,
+    "epoch": 1,
+    "exposure_time": "150*ms",
+    "max_rate": 60,
+    "spontaneous_rate": 0,
+    "record_interval": 50,
+    "network_type": "Mini_column_biological",
+    "L2/3" : {
+        "n_pyr": 5171,
+        "n_pv": 10,
+        "n_sst": 20,
+        "n_vip": 10
+    },
+    "L4" : {
+        "n_pyr": 5479,
+        "n_inh": 1370
+    },
+    "L5" : {
+        "n_pyr": 1213,
+        "n_inh": 266
+    },
+    "L6" : {
+        "n_pyr": 3599,
+        "n_inh": 737
+    },
+    "synapse": {
+        "decay_time": {
+            "pyr->pyr": 2.0,
+            "pv->pyr": 6.0,
+            "sst->pyr": 7.5,
+            "vip->pyr": 6.2,
+            "pyr->pv": 2.0,
+            "pv->pv": 4.3,
+            "sst->pv": 3.4,
+            "pyr->sst": 2.0,
+            "vip->sst": 10.4,
+            "pyr->vip": 2.0,
+            "pv->vip": 4.3,
+            "sst->vip": 3.4,
+            "exc": 0.5,
+            "inh": 0.5
+        }
+    },
+    "neuron":{
+        "tau_m": "10*ms",
+        "v_th": -50,
+        "v_reset": -65,
+        "tau_ref": "3*ms",
+        "c": 250
+        }
+}

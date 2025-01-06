@@ -13,6 +13,9 @@ import numpy as np
 import re
 from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
 from brian2 import SpikeMonitor
+import matplotlib
+matplotlib.use('TkAgg')  # または 'Qt5Agg'
+import matplotlib.pyplot as plt
 
 def print_simulation_start():
     """
@@ -178,10 +181,80 @@ def get_spikes_within_time_range(spikemon, start_time, end_time):
     spikes = [spike for spike in spikes if start_time <= spike[0] < end_time] # 単位そのままで比較
     return spikes
 
+def visualize_network(network):
+    """
+    brian2のネットワーク構造を可視化する関数
+    """
+    import networkx as nx
+    
+    # バックエンドを確認して設定
+    if matplotlib.get_backend() != 'TkAgg':
+        plt.switch_backend('TkAgg')
+    
+    # 新しいフィギュアを作成
+    fig = plt.figure(figsize=(12, 8))
+    
+    # グラフオブジェクトの作成
+    G = nx.DiGraph()
 
-def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:list, presentation_time, reset_time):
+    # ニューロングループとシナプスの情報を収集
+    neuron_groups = []
+    synapses = []
+    
+    for obj in network.objects:
+        if isinstance(obj, NeuronGroup):
+            neuron_groups.append(obj.name)
+            G.add_node(obj.name, type='neuron', size=obj.N)
+        elif isinstance(obj, Synapses):
+            synapses.append((obj.source.name, obj.target.name, obj.name))
+            G.add_edge(obj.source.name, obj.target.name, name=obj.name)
+
+    # グラフの描画
+    plt.figure(figsize=(12, 8))
+    pos = nx.spring_layout(G)
+    
+    # ノードの描画
+    nx.draw_networkx_nodes(G, pos, 
+                          node_color='lightblue',
+                          node_size=2000)
+    
+    # エッジの描画
+    nx.draw_networkx_edges(G, pos, 
+                          edge_color='gray',
+                          arrows=True,
+                          arrowsize=20)
+    
+    # ラベルの描画
+    nx.draw_networkx_labels(G, pos)
+    edge_labels = nx.get_edge_attributes(G, 'name')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels)
+
+    plt.title("Network Structure")
+    plt.axis('off')
+    
+    # 表示方法を変更
+    try:
+        fig.canvas.draw()
+        plt.pause(0.1)  # 短い待機時間を追加
+    except Exception as e:
+        print(f"[WARNING] グラフの表示に問題が発生しました: {e}")
+    
+    print("ネットワーク構造を表示しました。")
+
+def assign_labels2neurons(spikemon, n_neuron:int, labels:list, input_labels:list, presentation_time, reset_time):
     """
     ニューロンにラベルを割り当てます。
+
+    Args:
+        spikemon (SpikeMonitor): スパイクモニター
+        n_neuron (int): ニューロン数
+        labels (list): 割り当てるラベルのリスト
+        input_labels (list): 入力されたラベルのリスト
+        presentation_time (float): 画像の提示時間
+        reset_time (float): リセット時間
+
+    Returns:
+        np.ndarray: 各ニューロンに割り当てられたラベル
     """
     presentation_time /= ms
     reset_time /= ms
@@ -192,7 +265,10 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
     spike_indices = spikemon.i
     
     # 結果を格納する配列を初期化
-    spike_cnt = np.zeros((n_neuron, n_labels))
+    spike_cnt = np.zeros((n_neuron, len(labels)))
+    
+    # ラベルのインデックスを作成
+    label_to_idx = {label: i for i, label in enumerate(labels)}
     
     # 各画像の時間間隔を計算
     for n, label in enumerate(input_labels):
@@ -204,9 +280,12 @@ def assign_labels2neurons(spikemon, n_neuron:int, n_labels:int, input_labels:lis
         active_neurons = spike_indices[time_mask]
         
         # 発火カウントを更新
-        np.add.at(spike_cnt, (active_neurons, label), 1)
+        label_idx = label_to_idx[label]
+        np.add.at(spike_cnt, (active_neurons, label_idx), 1)
     
-    return np.argmax(spike_cnt, axis=1)
+    # 最も発火の多かったラベルのインデックスを取得し、対応するラベルを返す
+    label_indices = np.argmax(spike_cnt, axis=1)
+    return np.array([labels[idx] for idx in label_indices])
 
 def change_dir_name(dir_path, add_name):
     """

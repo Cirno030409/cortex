@@ -268,7 +268,7 @@ class Common_Plotter:
         与えられたステートモニターから重みのプロットを描画します。
 
         Args:
-            synapse (SynapseGroup): シナプスグループ
+            synapse (SynapseGroup or list or np.ndarray): シナプスグループか重みの行列
             n_pre (int): 前のニューロンの数
             n_post (int): 後のニューロンの数
             save_fig (bool): フィグを保存するかどうか
@@ -278,8 +278,14 @@ class Common_Plotter:
         """
         # synapse.w[neuron_idx][time_idx]
         weight_mat = np.zeros((n_pre, n_post))
-        for i, j, w in zip(synapse.i, synapse.j, synapse.w):
-            weight_mat[i, j] = w
+        if isinstance(synapse, Synapses):
+            for i, j, w in zip(synapse.i, synapse.j, synapse.w):
+                weight_mat[i, j] = w
+        elif isinstance(synapse, list) or isinstance(synapse, np.ndarray):
+            weight_mat = np.array(synapse)
+            weight_mat = weight_mat.reshape(n_pre, n_post)
+        else:
+            raise ValueError("synapseはSynapsesクラスのインスタンスか，重みの行列である必要があります。")
             
         # サブプロットの行数と列数を計算
         n_rows = int(np.ceil(np.sqrt(n_post)))

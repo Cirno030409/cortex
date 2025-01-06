@@ -1,6 +1,6 @@
 {
-    "n_samples": 40000,
-    "epoch": 2,
+    "n_samples": 10000,
+    "epoch": 1,
     "enable_monitor": false,
     "validation": true,
     "labels": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],

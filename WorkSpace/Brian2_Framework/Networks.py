@@ -20,7 +20,7 @@ class Network_Frame(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.network = Network()
-        
+        self.obj = {}
     def enable_learning(self):
         """
         学習を有効にします。
@@ -89,6 +89,33 @@ class Network_Frame(Network):
                 synapses[i].apost = 0
             except:
                 pass
+            
+class Mini_Column_biological(Network_Frame):
+    """
+    Jung H.Lee, Christof Koch, and Stefan MIhalas, 2017, "A Computational Analysis of the Functin of Three Inhibitory Cell Types in Contextual Visual Processing"
+    のミニカラムネットワーク。
+    """
+    def __init__(self, params:dict):
+        super().__init__()
+        obj = {}
+        
+        # L2/3
+        obj["N_pv"] = Conductance_LIF_Neuron(params["L2/3"]["n_pv"], params["neuron_params_pv"])
+        obj["N_sst"] = Conductance_LIF_Neuron(params["L2/3"]["n_sst"], params["neuron_params_sst"])
+        obj["N_vip"] = Conductance_LIF_Neuron(params["L2/3"]["n_vip"], params["neuron_params_vip"])
+        obj["N_pyr"] = Conductance_LIF_Neuron(params["L2/3"]["n_pyr"], params["neuron_params_pyr"])
+        
+        # L4
+        obj["N_pyr"] = Conductance_LIF_Neuron(params["L4"]["n_pyr"], params["neuron_params_pyr"])
+        obj["N_inh"] = Conductance_LIF_Neuron(params["L4"]["n_inh"], params["neuron_params_inh"])
+        
+        # L5
+        obj["N_pyr"] = Conductance_LIF_Neuron(params["L5"]["n_pyr"], params["neuron_params_pyr"])
+        obj["N_inh"] = Conductance_LIF_Neuron(params["L5"]["n_inh"], params["neuron_params_inh"])
+        
+        # L6
+        obj["N_pyr"] = Conductance_LIF_Neuron(params["L6"]["n_pyr"], params["neuron_params_pyr"])
+        obj["N_inh"] = Conductance_LIF_Neuron(params["L6"]["n_inh"], params["neuron_params_inh"])
         
 class Diehl_and_Cook_WTA(Network_Frame):
     """
@@ -280,6 +307,7 @@ class Mini_Column(Network_Frame):
             connect (bool): シナプスを接続するかどうか
             param_name (str): シナプスのパラメータの名前
         """
+        # 二つのニューロングループ間のシナプスを作成 & 接続
         if stdp_or_normal == "stdp":
             syn = STDP_Synapse(source, self.obj[connect_to], exc_or_inh=exc_or_inh, name=f"mc{self.column_id}_{syn_name}", connect=connect, params=self.params[param_name]) # 入力層から興奮ニューロン
             if self.enable_monitor:
@@ -319,7 +347,7 @@ class Cortex(Network_Frame):
             self.columns[i].connect_neurons(self.obj["N_inp"], connect_to="N_1", stdp_or_normal="stdp", exc_or_inh="exc", syn_name="S_0", param_name="stdp_synapse_params", connect=True) # 接続
         
         
-        # ミニカラム間を結合
+        # # ミニカラム間を結合
         for i in range(self.params["n_mini_column"]):
             for j in range(self.params["n_mini_column"]):
                 if i != j:
@@ -330,8 +358,201 @@ class Cortex(Network_Frame):
         self.network.add(self.obj.values())
         for column in self.columns.values():
             self.network.add(column.get_network())
+            
+class Optimized_Cortex(Network_Frame):
+    #! 結局未実装。実装予定もなし。
+    def __init__(self, enable_monitor:bool, params_cortex:dict, params_mc:dict):
+        super().__init__()
         
+        self.params_cortex = params_cortex
+        self.params_mc = params_mc
+        n_columns = params_cortex["n_mini_column"]
+        n_exc_per_column = params_mc["n_e"]
+        n_inh_per_column = params_mc["n_i"]
+            
+        # ニューロングループ
+        self.obj["N_inp"] = Poisson_Input_Neuron(
+            params_cortex["n_inp"], 
+            max_rate=params_cortex["max_rate"], 
+            name="N_inp"
+        )
+        self.obj["N_all_exc"] = Conductance_LIF_Neuron(
+            n_columns * n_exc_per_column, 
+            params_mc["neuron_params_e"], 
+            name="N_all_exc"
+        )
+        self.obj["N_all_inh"] = Conductance_LIF_Neuron(
+            n_columns * n_inh_per_column, 
+            params_mc["neuron_params_i"], 
+            name="N_all_inh"
+        )
         
+        # シナプス接続
+        # 1. 入力層→興奮性ニューロン
+        self.obj["S_inp_exc"] = STDP_Synapse(
+            self.obj["N_inp"], 
+            self.obj["N_all_exc"],
+            name="S_inp_exc",
+            connect=True,
+            params=params_mc["stdp_synapse_params"]
+        )
+        
+        # 2. 興奮性→抑制性（各ミニカラム内での1対1接続）
+        connect_ei = '(i // n_exc_per_column) == (j // n_inh_per_column) and ((i % n_exc_per_column) == (j % n_inh_per_column))'
+        
+        self.obj["S_ei"] = Normal_Synapse(
+            self.obj["N_all_exc"],
+            self.obj["N_all_inh"],
+            exc_or_inh="exc",
+            name="S_ei",
+            connect=connect_ei,
+            params=params_mc["static_synapse_params_ei"],
+            namespace={'n_exc_per_column': n_exc_per_column, 'n_inh_per_column': n_inh_per_column}
+        )
+        
+        # 3. 抑制性→興奮性（各ミニカラム内でのWTA結合）
+        connect_ie = '(i // n_inh_per_column) == (j // n_exc_per_column) and ((i % n_inh_per_column) != (j % n_exc_per_column))'
+        
+        self.obj["S_ie"] = Normal_Synapse(
+            self.obj["N_all_inh"], 
+            self.obj["N_all_exc"],
+            exc_or_inh="inh",
+            name="S_ie",
+            connect=connect_ie,
+            params=params_mc["static_synapse_params_ie"],
+            namespace={'n_exc_per_column': n_exc_per_column, 'n_inh_per_column': n_inh_per_column}
+        )
+        
+        # モニター
+        self.obj["spikemon_inp"] = SpikeMonitor(self.obj["N_inp"], record=True, name="spikemon_inp")
+        for i in range(n_columns):
+            self.obj[f"mc{i}_spikemon_exc"] = SpikeMonitor(self.obj["N_all_exc"][self.get_column_neurons_slice(i)["exc"]], record=True, name=f"mc{i}_spikemon_exc")
+            if enable_monitor:
+                self.obj[f"mc{i}_spikemon_inh"] = SpikeMonitor(self.obj["N_all_inh"][self.get_column_neurons_slice(i)["inh"]], record=True, name=f"mc{i}_spikemon_inh")
+        
+        self.network.add(self.obj.values())
+        
+    def get_network(self):
+        return self.network
+    
+    def get_column_neurons_slice(self, column_id: int) -> dict:
+        """
+        指定したカラムのニューロンを抽出します。
+        スライスオブジェクトを返します。
+
+        Args:
+            column_id (int): カラムのID
+
+        Returns:
+            dict: {"exc": 興奮性ニューロンのスライス, "inh": 抑制性ニューロンのスライス}
+        """
+        # ニューロンの数を取得
+        n_exc_per_column = self.obj["N_all_exc"].N // self.params_cortex["n_mini_column"]
+        n_inh_per_column = self.obj["N_all_inh"].N // self.params_cortex["n_mini_column"]
+        
+        # ニューロンのインデックスを取得
+        exc_start = column_id * n_exc_per_column
+        exc_end = (column_id + 1) * n_exc_per_column
+        inh_start = column_id * n_inh_per_column
+        inh_end = (column_id + 1) * n_inh_per_column
+        
+        return {
+            "exc": slice(exc_start, exc_end),
+            "inh": slice(inh_start, inh_end)
+        }
+        
+    def get_synaptic_weight(self, name: str, n_column:int, type:str) -> np.ndarray:
+        """
+        指定したシナプスの重みを取得します。
+        """
+        return self.network[name].w[self.get_column_synapse_slice(n_column)[type]]
+    
+    def get_column_synapses(self, column_id: int, name: str) -> Synapses:
+        """
+        指定したカラムに属するシナプスのみを抽出して新しいSynapsesオブジェクトを作成します。
+
+        Args:
+            column_idx (int): カラムのインデックス
+            name (str): シナプスの名前
+
+        Returns:
+            Synapses: 抽出された新しいシナプスオブジェクト
+        """
+        source_synapse = self.network[name]
+        # カラム内のニューロンのインデックス範囲を取得
+        neurons = self.get_column_neurons_slice(column_id)
+        
+        # シナプスの接続インデックスを取得
+        i, j = source_synapse.i[:], source_synapse.j[:]
+        w = source_synapse.w[:]
+        
+        # カラム内のシナプスのみを抽出するマスクを作成
+        mask = (i >= neurons["exc"].start) & (i < neurons["exc"].stop) & \
+            (j >= neurons["inh"].start) & (j < neurons["inh"].stop)
+            
+
+        print("\n",  neurons["exc"].start, neurons["exc"].stop, neurons["inh"].start, neurons["inh"].stop, "\n")
+        
+        # 新しいシナプスオブジェクトを作成
+        new_synapse = Synapses(
+            source_synapse.source,
+            source_synapse.target,
+            model=source_synapse.model,
+            on_pre=source_synapse.on_pre,
+            on_post=source_synapse.on_post,
+            name=f"mc{column_id}_{source_synapse.name}"
+        )
+        
+        # 抽出したシナプスの接続を設定
+        new_synapse.connect(i=i[mask], j=j[mask])
+        new_synapse.w = w[mask]
+        
+        return new_synapse
+        
+    def get_column_synapse_slice(self, column_id: int) -> dict:
+        """
+        指定したカラムのシナプスのインデックスを取得します。
+        スライスオブジェクトを返します。
+
+        Args:
+            column_id (int): カラムのID
+
+        Returns:
+            dict: {"inp_exc": 入力→興奮性のシナプスのスライス, 
+                  "ei": 興奮性→抑制性のシナプスのスライス, 
+                  "ie": 抑制性→興奮性のシナプスのスライス}
+        """
+        neurons = self.get_column_neurons_slice(column_id)
+        
+        synapse_slice = {
+            "inp_exc": slice(neurons["exc"].start * self.params_cortex["n_inp"], 
+                           neurons["exc"].stop * self.params_cortex["n_inp"]),
+            "ei": slice(neurons["exc"].start * self.params_mc["n_i"], 
+                       neurons["exc"].stop * self.params_mc["n_i"]),
+            "ie": slice(neurons["inh"].start * self.params_mc["n_e"], 
+                       neurons["inh"].stop * self.params_mc["n_e"])
+        }
+        
+        return synapse_slice
+
+    def get_column_weights(self, column_id: int) -> dict:
+        """
+        指定したカラムのシナプス重みを取得します。
+
+        Args:
+            column_id (int): カラムのID
+
+        Returns:
+            dict: {"input_exc": 入力→興奮性の重み, "exc_inh": 興奮性→抑制性の重み, "inh_exc": 抑制性→興奮性の重み}
+        """
+                
+        weights = {
+            "input_exc": self.obj["S_inp_exc"].w[self.get_column_synapse_slice(column_id)["inp_exc"]],
+            "exc_inh": self.obj["S_ei"].w[self.get_column_synapse_slice(column_id)["ei"]],
+            "inh_exc": self.obj["S_ie"].w[self.get_column_synapse_slice(column_id)["ie"]]
+        }
+        
+        return weights
         
 
 

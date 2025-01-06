@@ -84,7 +84,7 @@ with open(SAVE_PATH + "LEARNING/input image labels.json", "w") as f:
 
 # ===================================== ラベルの割り当て ==========================================
 print("[PROCESS] Assigning labels to neurons...")
-assigned_labels = tools.assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], 10, all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
+assigned_labels = tools.assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], params["labels"], all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
 tools.memo_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.txt"), assigned_labels) # メモ
 tools.save_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.pkl"), assigned_labels) # 保存
 weights = model.network["S_0"].w

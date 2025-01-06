@@ -24,7 +24,7 @@ class STDP_Synapse(Synapses):
             dapost/dt = (-apost)/taupost : 1 (event-driven)
             w : 1
         """
-
+        
         if exc_or_inh == "exc":
             self.on_pre = """
                 apre = Apre
@@ -78,14 +78,22 @@ class Normal_Synapse(Synapses):
             raise ValueError("シナプス作成時にパラメータの辞書を渡してください。")
         else:
             self.params = params
-
-        if exc_or_inh == "exc":
-            self.on_pre = "ge_post += w" # 後ニューロンへの興奮性入力
-        elif exc_or_inh == "inh":
-            self.on_pre = "gi_post += w" # 後ニューロンへの抑制性入力
-        else:
-            raise ValueError("通常のシナプスを作成するときは，'exc'か'inh'を指定してください。")
-
+            
+        # post_neuronがConductance BasedかCurrent Basedかチェック
+        if hasattr(post_neurons, "ge"): # Conductance Based
+            if exc_or_inh == "exc":
+                self.on_pre = "ge_post += w" # 後ニューロンへの興奮性入力
+            elif exc_or_inh == "inh":
+                self.on_pre = "gi_post += w" # 後ニューロンへの抑制性入力
+            else:
+                raise ValueError("通常のシナプスを作成するときは，'exc'か'inh'を指定してください。")
+        else: # Current Based
+            if exc_or_inh == "exc":
+                self.on_pre = "syne += w" # 後ニューロンへの興奮性入力
+            elif exc_or_inh == "inh":
+                self.on_pre = "syni += w" # 後ニューロンへの抑制性入力
+            else:
+                raise ValueError("通常のシナプスを作成するときは，'exc'か'inh'を指定してください。")
         
         super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, method="euler", name=name, *args, **kwargs)
         self.connect(connect)

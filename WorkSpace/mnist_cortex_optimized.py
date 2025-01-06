@@ -41,8 +41,7 @@ tools.save_parameters(os.path.join(SAVE_PATH, "learning_parameters.json"), param
 tools.save_parameters(os.path.join(SAVE_PATH, "learning_mini_column_parameters.json"), params_mc) # ミニカラムのパラメータをメモる
 
 plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成
-cortex = Cortex(params["enable_monitor"], params_cortex=params, params_mc=params_mc) # ネットワークを作成
-tools.visualize_network(cortex.network)
+cortex = Optimized_Cortex(params["enable_monitor"], params_cortex=params, params_mc=params_mc) # ネットワークを作成
 #! ===================================== シミュレーション ==========================================
 tools.print_simulation_start()
 print(f"\n▶ Examination name: {name_test}\n")
@@ -57,15 +56,15 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
                 if (i % params["record_interval"] == 0) or (i == 0) or (i == params["n_samples"]-1):
                     for k in range(params["n_mini_column"]): # ミニカラムごとに繰り返す
                         # ニューロンの発火率のヒートマップをプロット
-                        # plotter.firing_rate_heatmap(cortex.network[f"mc{k}_spikemon_for_assign"], 
-                        #                             params["exposure_time"]*(i-params["record_interval"]), 
-                        #                             params["exposure_time"]*i, 
-                        #                             save_fig=True, save_path=SAVE_PATH + f"LEARNING/learning weight matrix/mini column{k}/", 
-                        #                             n_this_fig=i+(j*params["n_samples"]))
+                        plotter.firing_rate_heatmap(cortex.network[f"mc{k}_spikemon_exc"], 
+                                                    params["exposure_time"]*(i-params["record_interval"]), 
+                                                    params["exposure_time"]*i, 
+                                                    save_fig=True, save_path=SAVE_PATH + f"LEARNING/learning weight matrix/mini column{k}/", 
+                                                    n_this_fig=i+(j*params["n_samples"]))
                         # シナプスの重みのプロット
-                        plotter.weight_plot(cortex.network[f"mc{k}_S_0"], n_pre=params_mc["n_inp"], n_post=params_mc["n_e"], save_path=SAVE_PATH + f"LEARNING/learning weight matrix/mini column{k}/", n_this_fig=i+(j*params["n_samples"]))
-            for k in range(params["n_mini_column"]): # ミニカラムごとに繰り返す
-                tools.normalize_weight(cortex.network[f"mc{k}_S_0"], params_mc["n_inp"] // 10, method="sum") # 重みの正規化
+                        plotter.weight_plot(cortex.get_column_synapses(k, "S_inp_exc"), n_pre=params_mc["n_inp"], n_post=params_mc["n_e"], save_path=SAVE_PATH + f"LEARNING/learning weight matrix/mini column{k}/", n_this_fig=i+(j*params["n_samples"]))
+            # for k in range(params["n_mini_column"]): # ミニカラムごとに繰り返す
+            #     tools.normalize_weight(cortex.network[f"mc{k}_S_0"], params_mc["n_inp"] // 10, method="sum") # 重みの正規化
             cortex.set_input_image(images[i], params["spontaneous_rate"]) # 入力画像の設定
             if i < params["sync_weight_term"]: # 初期重み同期
                 if j == 0:
