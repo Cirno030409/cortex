@@ -4,6 +4,7 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Synapses import *
 from brian2 import *
 import Brian2_Framework.Tools as tools
+from tqdm import tqdm
 
 class Network_Frame(Network):
     """
@@ -43,14 +44,15 @@ class Network_Frame(Network):
         """
         self.obj["N_inp"].change_image(image, spontaneous_rate)
         
-    def run(self, duration:int):
+    def run(self, duration:int, *args, **kwargs):
         """
         ネットワークを実行します。
 
         Args:
             duration (int): 実行時間
         """
-        self.network.run(duration)
+
+        self.network.run(duration, *args, **kwargs)
         
     def set_params(self, params: dict) -> None:
         """
@@ -90,7 +92,7 @@ class Network_Frame(Network):
             except:
                 pass
             
-class Mini_Column_biological(Network_Frame):
+class Mini_Column_biological_3inh(Network_Frame):
     """
     Jung H.Lee, Christof Koch, and Stefan MIhalas, 2017, "A Computational Analysis of the Functin of Three Inhibitory Cell Types in Contextual Visual Processing"
     のミニカラムネットワーク。
@@ -99,23 +101,73 @@ class Mini_Column_biological(Network_Frame):
         super().__init__()
         obj = {}
         
+        # 層とニューロンタイプの定義
+        layers = ["L23", "L4", "L5", "L6"]
+        neuron_types = ["pv", "sst", "vip", "pyr", "inh"]
+        
+        # ニューロン作成
         # L2/3
-        obj["N_pv"] = Conductance_LIF_Neuron(params["L2/3"]["n_pv"], params["neuron_params_pv"])
-        obj["N_sst"] = Conductance_LIF_Neuron(params["L2/3"]["n_sst"], params["neuron_params_sst"])
-        obj["N_vip"] = Conductance_LIF_Neuron(params["L2/3"]["n_vip"], params["neuron_params_vip"])
-        obj["N_pyr"] = Conductance_LIF_Neuron(params["L2/3"]["n_pyr"], params["neuron_params_pyr"])
+        obj["L23_N_pv"] = Conductance_LIF_Neuron(params["L23"]["n_pv"]*params["network_scale"], params["neuron"], name="L23_N_pv")
+        obj["L23_N_sst"] = Conductance_LIF_Neuron(params["L23"]["n_sst"]*params["network_scale"], params["neuron"], name="L23_N_sst")
+        obj["L23_N_vip"] = Conductance_LIF_Neuron(params["L23"]["n_vip"]*params["network_scale"], params["neuron"], name="L23_N_vip")
+        obj["L23_N_pyr"] = Conductance_LIF_Neuron(params["L23"]["n_pyr"]*params["network_scale"], params["neuron"], name="L23_N_pyr")
         
         # L4
-        obj["N_pyr"] = Conductance_LIF_Neuron(params["L4"]["n_pyr"], params["neuron_params_pyr"])
-        obj["N_inh"] = Conductance_LIF_Neuron(params["L4"]["n_inh"], params["neuron_params_inh"])
+        obj["L4_N_pyr"] = Conductance_LIF_Neuron(params["L4"]["n_pyr"]*params["network_scale"], params["neuron"], name="L4_N_pyr")
+        obj["L4_N_inh"] = Conductance_LIF_Neuron(params["L4"]["n_inh"]*params["network_scale"], params["neuron"], name="L4_N_inh")
         
         # L5
-        obj["N_pyr"] = Conductance_LIF_Neuron(params["L5"]["n_pyr"], params["neuron_params_pyr"])
-        obj["N_inh"] = Conductance_LIF_Neuron(params["L5"]["n_inh"], params["neuron_params_inh"])
+        obj["L5_N_pyr"] = Conductance_LIF_Neuron(params["L5"]["n_pyr"]*params["network_scale"], params["neuron"], name="L5_N_pyr")
+        obj["L5_N_inh"] = Conductance_LIF_Neuron(params["L5"]["n_inh"]*params["network_scale"], params["neuron"], name="L5_N_inh")
         
         # L6
-        obj["N_pyr"] = Conductance_LIF_Neuron(params["L6"]["n_pyr"], params["neuron_params_pyr"])
-        obj["N_inh"] = Conductance_LIF_Neuron(params["L6"]["n_inh"], params["neuron_params_inh"])
+        obj["L6_N_pyr"] = Conductance_LIF_Neuron(params["L6"]["n_pyr"]*params["network_scale"], params["neuron"], name="L6_N_pyr")
+        obj["L6_N_inh"] = Conductance_LIF_Neuron(params["L6"]["n_inh"]*params["network_scale"], params["neuron"], name="L6_N_inh")
+        
+        # シナプス作成
+        # 論文にあるシナプスの接続確率と重み使用してシナプスを作成
+        for from_layer in tqdm(layers, desc="Constructing Network"):
+            for from_neuron_type in neuron_types:
+                for to_layer in layers:
+                    for to_neuron_type in neuron_types:
+                        # L2/3層以外にはPV, SST, VIPはない
+                        if from_layer != "L23" and (from_neuron_type == "pv" or from_neuron_type == "vip" or from_neuron_type == "sst"):
+                            continue
+                        if to_layer != "L23" and (to_neuron_type == "pv" or to_neuron_type == "vip" or to_neuron_type == "sst"):
+                            continue
+                        if from_layer == "L23" and from_neuron_type == "inh":
+                            continue
+                        if to_layer == "L23" and to_neuron_type == "inh":
+                            continue
+                        # シナプス特性の設定 抑制性 or 興奮性 -> 抑制性 or 興奮性
+                        if from_neuron_type == "pv" or from_neuron_type == "sst" or from_neuron_type == "vip" or from_neuron_type == "inh":
+                            from_exc_or_inh = "inh"
+                        elif from_neuron_type == "pyr":
+                            from_exc_or_inh = "exc"
+                        else:
+                            raise ValueError("from_neuron_typeが不正です。")
+                        if to_neuron_type == "pv" or to_neuron_type == "sst" or to_neuron_type == "vip" or to_neuron_type == "inh":
+                            to_exc_or_inh = "inh"
+                        elif to_neuron_type == "pyr":
+                            to_exc_or_inh = "exc"
+                        else:
+                            raise ValueError("to_neuron_typeが不正です。")
+                        # シナプスを作成
+                        obj[f"{from_layer}_S_{from_neuron_type}_to_{to_layer}_{to_neuron_type}"] = Normal_Synapse(obj[f"{from_layer}_N_{from_neuron_type}"], 
+                                                                                                                  obj[f"{to_layer}_N_{to_neuron_type}"], 
+                                                                                                                  name=f"{from_layer}_S_{from_neuron_type}_to_{to_layer}_{to_neuron_type}", 
+                                                                                                                  connect=True, 
+                                                                                                                  p=params["synapse"]["conn_probability"][f"{from_exc_or_inh}->{to_exc_or_inh}"][from_layer][to_layer], # 接続確率
+                                                                                                                  params={"w": params["synapse"]["weight"][f"{from_neuron_type}->{to_neuron_type}"]}, # 重み
+                                                                                                                  exc_or_inh=from_exc_or_inh)
+                        
+        # モニター作成
+        for key in params["monitor"].keys():
+            self.network.add(
+                SpikeMonitor(obj[key], record=params["monitor"][key], name=f"spikemon_{key}"),
+            )
+        print(obj.keys())
+        self.network.add(obj.values())
         
 class Diehl_and_Cook_WTA(Network_Frame):
     """

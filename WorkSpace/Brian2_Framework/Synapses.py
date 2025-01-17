@@ -9,7 +9,7 @@ class STDP_Synapse(Synapses):
     STDPシナプスを作成します。
     """
 
-    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="exc", *args, **kwargs):
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="exc", p=1.0, *args, **kwargs):
         """
         pre_neurons: 前ニューロン
         post_neurons: 後ニューロン
@@ -50,7 +50,7 @@ class STDP_Synapse(Synapses):
             self.params = params
         
         super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, on_post=self.on_post, namespace=self.params, name=name, *args, **kwargs)
-        self.connect(connect)
+        self.connect(connect, p=p)
         self.w = "rand() * (wmax - wmin) + wmin"
 
 class Normal_Synapse(Synapses):
@@ -59,7 +59,7 @@ class Normal_Synapse(Synapses):
     非STDPシナプスを作成します。
     """
 
-    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="", *args, **kwargs):
+    def __init__(self, pre_neurons:NeuronGroup, post_neurons:NeuronGroup, name:str, connect=True, params=None, exc_or_inh:str="", p=1.0, *args, **kwargs):
         """
         学習を行わない非STDPシナプスを作成します。
         
@@ -96,5 +96,5 @@ class Normal_Synapse(Synapses):
                 raise ValueError("通常のシナプスを作成するときは，'exc'か'inh'を指定してください。")
         
         super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, method="euler", name=name, *args, **kwargs)
-        self.connect(connect)
+        self.connect(connect, p=p)
         self.w = self.params["w"]

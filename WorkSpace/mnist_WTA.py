@@ -9,7 +9,7 @@ from brian2 import *
 from tqdm import tqdm
 
 import Brian2_Framework.Datasets as Datasets
-import Brian2_Framework.Plotters as Plotters
+import Brian2_Framework.Plotters as plotter
 import Brian2_Framework.RealtimePlotter as RealtimePlotter
 import Brian2_Framework.Tools as tools
 from Brian2_Framework.Networks import *
@@ -36,7 +36,6 @@ if params["enable_monitor"]:
 SAVE_PATH = TARGET_PATH
 tools.save_parameters(os.path.join(SAVE_PATH, "parameters.json"), params) # パラメータをメモる
 
-plotter = Plotters.Common_Plotter() # プロットを行うインスタンスを作成 
 model = Diehl_and_Cook_WTA(params["enable_monitor"], params) # ネットワークを作成
 if params["enable_monitor"]:
     realtime_plotter = RealtimePlotter.RealtimePlotter(model.network, params, time_window=2000)
@@ -67,7 +66,7 @@ for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True)
             model.run(params["exposure_time"])
             model.reset() # ネットワークをリセット
     except KeyboardInterrupt:
-        print("[INFO] Simulation interrupted by user.")
+        print("[INFO] Simulation was interrupted by user.")
     finally:
         if params["enable_monitor"]:
             realtime_plotter.close()
