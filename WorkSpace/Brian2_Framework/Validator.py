@@ -2,21 +2,19 @@
 既存のネットワークを使ってAccuracyを計算します。
 """
 from brian2 import *
-import Brian2_Framework.Datasets as mnist
+from Brian2_Framework.Datasets import mnist
 from Brian2_Framework.Networks import Diehl_and_Cook_WTA, Chunk_WTA, Center_Surround_WTA, Cortex
-import Brian2_Framework.Tools as tools
+from Brian2_Framework.Tools import *
+from Brian2_Framework.Plotters import *
 from brian2.units import *
 import numpy as np
 from tqdm import tqdm
 import pickle
-from Brian2_Framework.Plotters import Common_Plotter
 import pprint as pp
 import matplotlib.pyplot as plt
 import os
 import seaborn as sns
-import Brian2_Framework.Plotters as Plotters
 from datetime import datetime as dt
-from Brian2_Framework.Plotters import Common_Plotter
 import plotly.graph_objects as go
 import plotly.io as pio
 import shutil

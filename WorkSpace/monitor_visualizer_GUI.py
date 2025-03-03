@@ -10,6 +10,7 @@ import os
 import time
 import json
 import matplotlib.lines
+import numpy as np
 
 file_path = []
 
@@ -130,6 +131,8 @@ def plot_monitor(file_paths):
         time_slider.pack(fill='x', padx=5)
     
     def plot_all():
+        global fig_spike, fig_state, on_spike_click, on_state_click
+        
         # 時間範囲の設定
         if time_slider:
             time_window = time_slider.get()
@@ -150,8 +153,9 @@ def plot_monitor(file_paths):
         selected_state_monitors = [monitor for type_, monitor in selected_monitors if type_ == 'state']
         
         if selected_spike_monitors:
-            plotter = Common_Plotter()
-            fig_spike = plotter.raster_plot(selected_spike_monitors, time_end=time_window)
+            # raster_plot関数がリストを返しているため、最初の要素を取得
+            fig_list = raster_plot(selected_spike_monitors, time_end=time_window)
+            fig_spike = fig_list[0] if isinstance(fig_list, list) else fig_list
             
             # スパイクプロットにクリックイベントを追加
             def on_spike_click(event):
@@ -206,12 +210,16 @@ def plot_monitor(file_paths):
             new_figures.append(fig_spike)
         
         for monitor in selected_state_monitors:
-            plotter = Common_Plotter()
             selected_vars = [var for var, check in var_checks.items() if check.get()]
-            fig_state = plotter.state_plot(monitor, neuron_num=neuron_slider.get(), 
+            fig_state = state_plot(monitor, neuron_num=neuron_slider.get(), 
                                          variable_names=selected_vars, 
                                          time_end=time_window)
             new_figures.append(fig_state)
+        
+        # 新しいfigureがない場合は処理を終了
+        if not new_figures:
+            tk.messagebox.showinfo("情報", "表示するプロットがありません。モニターを選択してください。")
+            return
         
         # 新しいfigureを追加し、closeイベントを設定
         for fig in new_figures:
@@ -430,7 +438,11 @@ def plot_monitor(file_paths):
                         else:
                             offset_max = float(max(offsets[:, 0]))
                         max_time = max(max_time, offset_max)        
-        plt.show()
+        
+        # plt.show()を削除 - 余分なウィンドウの表示を防ぐ
+        # 代わりに各figureを個別に表示
+        for fig in new_figures:
+            fig.show()
     
     # StateMonitorの変数選択用チェックボックス（StateMonitorが存在する場合のみ）
     var_checks = {}
@@ -666,7 +678,7 @@ root = TkinterDnD.Tk()
 root.title("Monitor Visualizer")
 root.geometry("800x600")
 
-root.protocol("WM_DELETE_WINDOW", on_closing)  # 閉じるボタンが押された時��ハンドラを設
+root.protocol("WM_DELETE_WINDOW", on_closing)  # 閉じるボタンが押された時のハンドラを設定
 
 # メインのドロップゾーン（モニターファイル用）
 monitor_drop_frame = tk.Frame(root, bg="lightblue", borderwidth=2, relief="groove")

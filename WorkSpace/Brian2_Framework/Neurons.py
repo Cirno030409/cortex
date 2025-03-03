@@ -6,6 +6,40 @@ from brian2 import NeuronGroup, PoissonGroup
 from brian2.units import *
 import pprint as pp
 
+class Current_LIF_Neuron(NeuronGroup):
+    """
+    電流ベースのLIFニューロンを作成します。
+    """
+    def __init__(self, N, params=None, *args, **kwargs):
+        if params is None:
+            raise ValueError("ニューロンを作成する際、パラメータを必ず指定する必要があります。")
+        self.params = params
+        self.model = """
+            dv/dt = ((v_rest - v) + (Ie - Ii + I_noise) * rm) / taum : volt (unless refractory)
+            dtheta/dt = -theta/tautheta : volt
+            Ie : amp
+            Ii : amp
+            I_noise : amp
+        """
+        super().__init__(N, model=self.model, threshold="v>(v_th + theta)", 
+                         reset="v=v_reset; theta+=theta_dt", refractory="refractory", 
+                         method="euler", namespace=dict(self.params), *args, **kwargs)
+        self.v = self.params["v_reset"]
+
+    def change_params(self, params):
+        """
+        ニューロンのパラメータを変更する。
+
+        Args:
+            params (dict): ニューロンのパラメータ
+        """
+        for key, value in params.items():
+            self.params[key] = value  # パラメータ辞書を更新
+        
+        print("Neuron parameters were changed:")
+        for key, value in params.items():
+            print(f"{key}: {value}")
+
 class Conductance_LIF_Neuron(NeuronGroup):
     
     def __init__(self, N, params=None, *args, **kwargs):
@@ -13,19 +47,19 @@ class Conductance_LIF_Neuron(NeuronGroup):
             raise ValueError("ニューロンを作成する際、パラメータを必ず指定する必要があります。")
         self.params = params
         self.model = """
-            dv/dt = ((v_rest - v) + (Ie + Ii + I_noise)) / taum : 1 (unless refractory)
-            dge/dt = (-ge)/tauge : 1
-            dgi/dt = (-gi)/taugi : 1
-            dtheta/dt = -theta/tautheta : 1
-            Ie = ge * (v_rev_e - v) : 1
-            Ii = gi * (v_rev_i - v) : 1
-        """
+            dv/dt = ((v_rest - v) + (Ie + Ii + I_noise) * rm) / taum : volt (unless refractory)
+            dge/dt = (-ge)/tauge : siemens
+            dgi/dt = (-gi)/taugi : siemens
+            dtheta/dt = -theta/tautheta : volt
+            Ie = ge * (v_rev_e - v) : amp
+            Ii = gi * (v_rev_i - v) : amp
+        """ #NOTE 抑制性ニューロンが興奮性出力をしないようにIiの算出においてvをclipしている
         super().__init__(N, model=self.model, threshold="v>(v_th + theta)", 
                          reset="v=v_reset; theta+=theta_dt", refractory="refractory", 
-                         method="euler", namespace=self.params, *args, **kwargs)
+                         method="euler", namespace=dict(self.params), *args, **kwargs)
         self.v = self.params["v_reset"]
-        self.ge = 0
-        self.gi = 0
+        self.ge = 0 * nS
+        self.gi = 0 * nS
 
     def change_params(self, params):
         """
@@ -80,7 +114,20 @@ class Conductance_Izhikevich2003(NeuronGroup):
     
         
 class Poisson_Input_Neuron(PoissonGroup):
-    def __init__(self, N, max_rate:float, *args, **kwargs):
+    def __init__(self, N, max_rate:float=None, *args, **kwargs):
+        """
+        ポアソンニューロンを作成します。
+
+        Args:
+            N (int): ニューロン数
+            max_rate (float, optional): 最大発火率. Defaults to None.
+            
+        Methods:
+            change_image(image:np.array, spontaneous_rate:int=0): 画像を変更します。
+            set_rate(rate:float | np.array): 発火率を設定します。
+            get_rate_from_image_equalize_sum(image:np.array, goal_sum:int): 画像の画素の合計値がgoal_sumになるように正規化します。
+            get_rate_from_image(image:list, spontaneous_rate:int): 画像を発火率に変換します。
+        """
         self.max_rate = max_rate
         self.rates = np.zeros(N)
         super().__init__(N, self.rates * Hz, *args, **kwargs)
@@ -88,6 +135,16 @@ class Poisson_Input_Neuron(PoissonGroup):
     def change_image(self, image:np.array, spontaneous_rate:int=0):
         # self.rates = self.get_rate_from_image(image, spontaneous_rate)
         self.rates = self.get_rate_from_image_equalize_sum(image, 4480)
+        self.rates_ = self.rates
+        
+    def set_rate(self, rate):
+        """
+        ポアソンニューロンの発火率を設定します。
+
+        Args:
+            rate (float | np.array): 発火率
+        """
+        self.rates = rate
         self.rates_ = self.rates
         
     def get_rate_from_image_equalize_sum(self, image:np.array, goal_sum:int):
@@ -114,6 +171,8 @@ class Poisson_Input_Neuron(PoissonGroup):
         return normalized_image.flatten() * Hz
 
     def get_rate_from_image(self, image:list, spontaneous_rate):
+        if self.max_rate is None:
+            raise ValueError("max_rateが指定されていません。")
         image = np.array(image).astype(float)
         if image.max() != 0:
             image /= image.max()  # 最大値がゼロの場合、正規化を行わない

@@ -1,14 +1,14 @@
-{
-    "I_noise": 0,
-    "tauge": "1*ms",
-    "taugi": "2*ms",
-    "taum": "50*ms",
-    "theta_dt": 0.1,
-    "tautheta": "1e7*ms",
-    "v_rev_e": 0,
-    "v_rev_i": -100,
-    "refractory": "2*ms",
-    "v_reset": -60,
-    "v_rest": -50,
-    "v_th": -40
+{"tauge": "1*ms",
+"taugi": "2*ms",
+"taum": "10*ms",
+"theta_dt": "0*mV",
+"tautheta": "1e7*ms",
+"v_rev_e": "0*mV",
+"v_rev_i": "-100*mV",
+"refractory": "3*ms",
+"v_th": "-50*mV",
+"v_reset": "-65*mV",
+"v_rest": "-65*mV",
+"cm": "250*pF",
+"rm": "40*Mohm"
 }
