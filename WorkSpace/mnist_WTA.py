@@ -17,6 +17,8 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Synapses import *
 from Brian2_Framework.Validator import Validator
 
+defaultclock.dt = 0.5*ms
+
 
 # ===================================== パラメータ ==========================================
 test_comment = "WTA" #! 実験用コメント
@@ -44,7 +46,7 @@ if params["enable_monitor"]:
 start_time = dt.now()
 #! ===================================== シミュレーション ==========================================
 tools.print_simulation_start()
-print(f"\n▶ Examination name: {name_test}\n")
+print(f"\n> Examination name: {name_test}\n")
 all_labels = [] # 全Epochで入力された全ラベル
 for j in tqdm(range(params["epoch"]), desc="epoch progress", dynamic_ncols=True): # エポック数繰り返す
     images, labels = get_mnist_sample_equality_labels(params["n_samples"], "train") # テスト用の画像とラベルを取得
@@ -83,6 +85,8 @@ with open(SAVE_PATH + "LEARNING/input image labels.json", "w") as f:
 
 # ===================================== ラベルの割り当て ==========================================
 print("[PROCESS] Assigning labels to neurons...")
+if params["enable_monitor"]:
+    plot_all_monitors(model.network, params["exposure_time"], 0*ms, SAVE_PATH + "LEARNING/")
 assigned_labels = assign_labels2neurons(model.network["spikemon_for_assign"],params["n_e"], params["labels"], all_labels, params["exposure_time"], 0*ms) # ニューロンにラベルを割り当てる
 memo_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.txt"), assigned_labels) # メモ
 save_assigned_labels(os.path.join(SAVE_PATH, "assigned_labels.pkl"), assigned_labels) # 保存

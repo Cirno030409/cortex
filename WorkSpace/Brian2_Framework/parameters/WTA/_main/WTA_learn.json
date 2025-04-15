@@ -1,10 +1,10 @@
 {
-    "n_samples": 10000,
+    "n_samples": 1000,
     "epoch": 1,
-    "enable_monitor": true,
+    "enable_monitor": false,
     "validation": true,
     "labels": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    "record_interval": 100,
+    "record_interval": 1,
     "exposure_time": "150*ms",
     "n_inp": 784,
     "n_e": 100,
@@ -14,11 +14,10 @@
     "seed": 3,
     "network_type": "WTA",
     "neuron_params_e": {
-        "I_noise": "0*pA",
         "tauge": "1*ms",
         "taugi": "2*ms",
         "taum": "50*ms",
-        "theta_dt": "0.1*mV",
+        "theta_dt": "0.05*mV",
         "tautheta": "1e7*ms",
         "v_rev_e": "0*mV",
         "v_rev_i": "-100*mV",
@@ -29,7 +28,6 @@
         "rm": "40*Mohm"
     },
     "neuron_params_i": {
-        "I_noise": "0*pA",
         "tauge": "1*ms",
         "taugi": "2*ms",
         "taum": "10*ms",
@@ -54,15 +52,17 @@
         "nu_post": 0.00005,
         "alpha": "0*nS",
         "sw": 1,
-        "ge_gain": 1,
-        "gi_gain": 1
+        "ge_gain": 100,
+        "gi_gain": 100
     },
     "static_synapse_params_ei": {
-        "w": "30*nS",
+        "w": "100*nS",
+        "w_memo": "30*nS",
         "delay": "1*ms"
     },
     "static_synapse_params_ie": {
-        "w": "22*nS",
+        "w": "250*nS",
+        "w_memo": "22*nS",
         "delay": "1*ms"
     }
 }

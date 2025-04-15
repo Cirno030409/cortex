@@ -53,6 +53,7 @@ class Conductance_LIF_Neuron(NeuronGroup):
             dtheta/dt = -theta/tautheta : volt
             Ie = ge * (v_rev_e - v) : amp
             Ii = gi * (v_rev_i - v) : amp
+            I_noise : amp
         """ #NOTE 抑制性ニューロンが興奮性出力をしないようにIiの算出においてvをclipしている
         super().__init__(N, model=self.model, threshold="v>(v_th + theta)", 
                          reset="v=v_reset; theta+=theta_dt", refractory="refractory", 

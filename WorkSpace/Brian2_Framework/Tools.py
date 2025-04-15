@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from brian2.units import *
 from matplotlib.widgets import Button
-
+import mpld3
 plt.rcParams["font.size"] = 15
 plt.rcParams["font.family"] = "Times New Roman"
 
@@ -203,22 +203,24 @@ def get_spikes_within_time_range(spikemon, start_time, end_time):
     spikes = [spike for spike in spikes if start_time <= spike[0] < end_time] # 単位そのままで比較
     return spikes
 
-def visualize_network(network):
+def visualize_network(network, save_path:str=None):
     """
     brian2のネットワーク構造を可視化する関数 (改善版)
     ネットワーク内のNeuronGroupの大きさに応じたノードサイズや、凡例、矢印スタイルの改善を行いました。
     シナプス強度に応じて矢印の太さが変化します。
     階層構造を考慮したレイアウトを使用します。
     シナプス名はマウスホバーで表示されます。
+    ニューロン名に"M0"や"M1"などが含まれる場合、カラム別に配置します。
     """
     import networkx as nx
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
     import numpy as np
+    import re
     from brian2.units import amp, siemens, pA, nS
 
     # 図の作成（先に作成して他の処理の前に配置）
-    fig = plt.figure(figsize=(16, 12))  # より大きなサイズに変更
+    fig = plt.figure(figsize=(10, 10))  # より大きなサイズに変更
     fig.canvas.manager.set_window_title('Network Structure')  # ウィンドウタイトルを設定
     ax = fig.add_subplot(111)
 
@@ -289,6 +291,37 @@ def visualize_network(network):
         'noise': []
     }
 
+    # カラム情報を格納する辞書
+    column_info = {}
+
+    # ニューロン名からカラム情報を抽出する正規表現パターン
+    # 複数のパターンを試す
+    column_patterns = [
+        re.compile(r'M(\d+)'),           # M0, M1 などの標準パターン
+        re.compile(r'minicolumn(\d+)'),  # minicolumn0, minicolumn1 などのパターン
+        re.compile(r'column[_-]?(\d+)'), # column0, column_0, column-0 などのパターン
+        re.compile(r'col[_-]?(\d+)')     # col0, col_0, col-0 などのパターン
+    ]
+
+    # 各ノードのカラム情報を取得
+    for node in G.nodes():
+        for pattern in column_patterns:
+            match = pattern.search(str(node))
+            if match:
+                column_number = int(match.group(1))
+                column_info[node] = column_number
+                break  # 最初にマッチしたパターンを使用
+
+    # カラムの数を確認
+    column_numbers = set(column_info.values()) if column_info else set()
+    
+    # # カラムが見つかった場合は出力
+    # if column_numbers:
+    #     print(f"検出されたカラム: {sorted(column_numbers)}")
+    #     print(f"カラム情報を持つノード数: {len(column_info)}")
+    #     for node, col in column_info.items():
+    #         print(f"  ノード: {node}, カラム: {col}")
+
     # 各レイヤーのノードに座標を割り当て
     y_positions = {
         'L23': 6 * layer_spacing,  # より広い垂直間隔
@@ -315,18 +348,60 @@ def visualize_network(network):
         else:
             other_nodes.append(node)
 
-    # レイヤー分類されたノードの座標を割り当て
-    pos = {}
-    for layer, nodes in layer_nodes.items():
-        if not nodes:
-            continue
+    # カラム情報がある場合、各レイヤー内でさらにカラムごとに分類
+    if column_numbers:
+        column_count = len(column_numbers)
+        column_width = 3.0  # カラム間の水平距離
         
-        # 各レイヤー内でのx座標を計算
-        x_offset = -(len(nodes) - 1) * node_spacing / 2
-        for i, node in enumerate(sorted(nodes)):
-            x = x_offset + i * node_spacing
+        for layer, nodes in layer_nodes.items():
+            if not nodes:
+                continue
+            
+            # レイヤー内のノードをカラムごとに分類
+            column_nodes = {col: [] for col in column_numbers}
+            non_column_nodes = []
+            
+            for node in nodes:
+                if node in column_info:
+                    column_nodes[column_info[node]].append(node)
+                else:
+                    non_column_nodes.append(node)
+            
+            # カラムごとにノードの座標を割り当て
             y = y_positions[layer]
-            pos[node] = np.array([x, y])
+            
+            # 非カラムノードがある場合、左側に配置
+            if non_column_nodes:
+                x_offset = -(column_count * column_width / 2) - node_spacing
+                for i, node in enumerate(sorted(non_column_nodes)):
+                    x = x_offset - i * node_spacing
+                    pos[node] = np.array([x, y])
+            
+            # カラムノードを配置
+            for col_idx, col in enumerate(sorted(column_numbers)):
+                col_nodes = column_nodes[col]
+                if not col_nodes:
+                    continue
+                
+                x_center = -column_count * column_width / 2 + col_idx * column_width + column_width / 2
+                
+                # カラム内でのx座標を計算
+                local_x_offset = -(len(col_nodes) - 1) * node_spacing / 2
+                for i, node in enumerate(sorted(col_nodes)):
+                    x = x_center + local_x_offset + i * node_spacing
+                    pos[node] = np.array([x, y])
+    else:
+        # カラム情報がない場合は元の配置方法を使用
+        for layer, nodes in layer_nodes.items():
+            if not nodes:
+                continue
+            
+            # 各レイヤー内でのx座標を計算
+            x_offset = -(len(nodes) - 1) * node_spacing / 2
+            for i, node in enumerate(sorted(nodes)):
+                x = x_offset + i * node_spacing
+                y = y_positions[layer]
+                pos[node] = np.array([x, y])
 
     # 未分類ノードがある場合、Spring Layoutで配置
     if other_nodes:
@@ -520,7 +595,14 @@ def visualize_network(network):
                     tau_value = float(tau)
             tau_str = f", τ={tau_value:.1f} ms" if tau_value is not None else ""
             
-            edge_labels[(u, v)] = f"{G[u][v]['name']}\n(w={G[u][v]['weight']:.1f} {G[u][v]['weight_unit']}{p_str}{tau_str})"
+            # weighting_factorがある場合、デフォルト値(1.0)と異なる場合のみ表示
+            wf_str = ""
+            if hasattr(synapse_obj, 'weighting_factor'):
+                wf_value = synapse_obj.weighting_factor
+                # デフォルト値であっても常に表示する
+                wf_str = f", wf={wf_value:.3f}"
+            
+            edge_labels[(u, v)] = f"{G[u][v]['name']}\n(w={G[u][v]['weight']:.1f} {G[u][v]['weight_unit']}{p_str}{tau_str}{wf_str})"
 
         # ホバーイベントの設定
         def hover(event):
@@ -667,12 +749,47 @@ def visualize_network(network):
     # ニューロンノードの描画
     neuron_nodes = [n for n, attr in G.nodes(data=True) if attr.get('type') == 'neuron']
     if neuron_nodes:
-        node_collection = nx.draw_networkx_nodes(G, pos,
-                            nodelist=neuron_nodes,
-                            node_color='skyblue',
-                                            node_size=3000,
-                            edgecolors='black',
-                                            linewidths=2)
+        # カラム情報がある場合、カラムごとに異なる色を使用
+        if column_numbers:
+            # カラム別のカラーマップを作成
+            import matplotlib.cm as cm
+            colormap = cm.get_cmap('tab10', max(len(column_numbers), 1))  # カラム数に応じたカラーマップ
+            column_colors = {}
+            column_nodes = {}
+            
+            # カラムごとに色を割り当て
+            for i, col in enumerate(sorted(column_numbers)):
+                column_colors[col] = colormap(i)
+                column_nodes[col] = [n for n in neuron_nodes if n in column_info and column_info[n] == col]
+            
+            # カラム別にノードを描画
+            for col in sorted(column_numbers):
+                col_nodes = column_nodes[col]
+                if col_nodes:
+                    nx.draw_networkx_nodes(G, pos,
+                                       nodelist=col_nodes,
+                                       node_color=[column_colors[col]] * len(col_nodes),
+                                       node_size=3000,
+                                       edgecolors='black',
+                                       linewidths=2)
+            
+            # カラム情報のないノードを描画
+            non_col_nodes = [n for n in neuron_nodes if n not in column_info]
+            if non_col_nodes:
+                nx.draw_networkx_nodes(G, pos,
+                                   nodelist=non_col_nodes,
+                                   node_color='skyblue',
+                                   node_size=3000,
+                                   edgecolors='black',
+                                   linewidths=2)
+        else:
+            # カラム情報がない場合は全て同じ色で描画
+            node_collection = nx.draw_networkx_nodes(G, pos,
+                                nodelist=neuron_nodes,
+                                node_color='skyblue',
+                                node_size=3000,
+                                edgecolors='black',
+                                linewidths=2)
 
         # ノードラベルの描画
         labels = {n: G.nodes[n]['label'] for n in neuron_nodes}
@@ -897,12 +1014,29 @@ def visualize_network(network):
             
             # タイトルと凡例の再描画
             plt.title("Network Structure", fontsize=24, pad=20, fontweight='bold', fontfamily='Times New Roman')
-            neuron_patch = mpatches.Patch(color='skyblue', label='Neurons')
-            exc_line = mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-            inh_line = mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-            plt.legend(handles=[neuron_patch, exc_line, inh_line], fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
             
-            fig.canvas.draw_idle()
+            # 凡例項目のリスト
+            legend_handles = [mpatches.Patch(color='skyblue', label='Neurons')]
+            
+            # カラム情報がある場合は追加
+            if column_numbers:
+                import matplotlib.cm as cm
+                colormap = cm.get_cmap('tab10', max(len(column_numbers), 1))
+                for i, col in enumerate(sorted(column_numbers)):
+                    legend_handles.append(mpatches.Patch(color=colormap(i), label=f'Column {col}'))
+            
+            # シナプスの凡例
+            legend_handles.append(mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+            legend_handles.append(mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+            
+            plt.legend(handles=legend_handles, fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
+            
+            plt.axis('off')
+            plt.tight_layout()
+            
+            # ファイルに保存
+            if save_path is not None:
+                plt.savefig(save_path, dpi=300, bbox_inches='tight')
         
         def on_release(event):
             if event.inaxes != ax:
@@ -1114,236 +1248,24 @@ def visualize_network(network):
                     
                     # タイトルと凡例の再描画
                     plt.title("Network Structure", fontsize=24, pad=20, fontweight='bold', fontfamily='Times New Roman')
-                    neuron_patch = mpatches.Patch(color='skyblue', label='Neurons')
-                    exc_line = mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-                    inh_line = mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-                    plt.legend(handles=[neuron_patch, exc_line, inh_line], fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
+                    
+                    # 凡例項目のリスト
+                    legend_handles = [mpatches.Patch(color='skyblue', label='Neurons')]
+                    
+                    # カラム情報がある場合は追加
+                    if column_numbers:
+                        import matplotlib.cm as cm
+                        colormap = cm.get_cmap('tab10', max(len(column_numbers), 1))
+                        for i, col in enumerate(sorted(column_numbers)):
+                            legend_handles.append(mpatches.Patch(color=colormap(i), label=f'Column {col}'))
+                    
+                    # シナプスの凡例
+                    legend_handles.append(mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+                    legend_handles.append(mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+                    
+                    plt.legend(handles=legend_handles, fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
                     
                     fig.canvas.draw_idle()
-                
-                # ドラッグ状態をリセット
-                dragged_node[0] = None
-                mouse_moved[0] = False
-                initial_click_pos[0] = None
-            
-            elif event.button == 3 and closest_node is not None:  # 右クリックの処理
-                # ノードを元の位置に戻す
-                node_positions[closest_node] = original_positions[closest_node].copy()
-                
-                # 再描画
-                ax.clear()
-                plt.axis('off')
-                
-                # エッジの再描画
-                if G.edges():
-                    # シナプス強度を正規化して線の太さに変換
-                    weights = [abs(G[u][v]['weight']) for u, v in G.edges()]
-
-                    # 重みが0でないエッジのみを抽出
-                    non_zero_edges = []
-                    for u, v in G.edges():
-                        # シナプスオブジェクトを探す
-                        synapse_obj = None
-                        for obj in network.objects:
-                            if isinstance(obj, Synapses) and obj.name == G[u][v]['name']:
-                                synapse_obj = obj
-                                break
-                        
-                        if synapse_obj is None:
-                            continue
-
-                        # 接続確率を取得
-                        try:
-                            p_value = synapse_obj.p
-                        except AttributeError:
-                            print(f"[WARNING] シナプス {G[u][v]['name']} にp属性が存在しません。")
-                            continue
-
-                        # 重みと接続確率の両方が0より大きいエッジのみを追加
-                        if abs(G[u][v]['weight']) > 0 and p_value > 0:
-                            non_zero_edges.append((u, v))
-
-                    if not non_zero_edges:  # 有効なエッジがない場合は処理をスキップ
-                        return
-
-                    # 重みが0でないエッジの重みのみを使用して正規化
-                    weights = [abs(G[u][v]['weight']) for u, v in non_zero_edges]
-                    max_weight = max(weights)
-                    min_weight = min(weights)
-
-                    if max_weight == min_weight:
-                        normalized_weights = [2.0] * len(weights)
-                    else:
-                        normalized_weights = [(w - min_weight) / (max_weight - min_weight) * 4 + 1 for w in weights]
-
-                    # エッジの色をシナプスタイプに応じて設定（重みが0でないエッジのみ）
-                    edge_colors = ['red' if G[u][v]['synapse_type'] == 'exc' else 'blue' for u, v in non_zero_edges]
-
-                    # 自己結合と通常の結合を分離（重みが0でないエッジのみ）
-                    self_edges = [(u, v) for (u, v) in non_zero_edges if u == v]
-                    normal_edges = [(u, v) for (u, v) in non_zero_edges if u != v]
-
-                    # 通常の結合を重みの降順でソート
-                    if normal_edges:
-                        normal_edges_with_weights = [(u, v, normalized_weights[i]) 
-                                                   for i, (u, v) in enumerate(non_zero_edges) if u != v]
-                        normal_edges_with_weights.sort(key=lambda x: x[2], reverse=True)
-                        
-                        # 重みの大きい順に描画（太い線が下になるように）
-                        for u, v, weight in normal_edges_with_weights:
-                            edge_idx = non_zero_edges.index((u, v))
-                            # シナプスオブジェクトを探す
-                            synapse_obj = None
-                            for obj in network.objects:
-                                if isinstance(obj, Synapses) and obj.name == G[u][v]['name']:
-                                    synapse_obj = obj
-                                    break
-                            
-                            # 基本の透明度を接続確率に基づいて設定
-                            if synapse_obj is not None:
-                                try:
-                                    p_value = synapse_obj.p
-                                    base_alpha = 0.2 + 0.6 * p_value  # p=0で0.2, p=1で0.8
-                                except AttributeError:
-                                    base_alpha = 0.5  # デフォルト値
-                            else:
-                                base_alpha = 0.5
-
-                            # 選択状態に応じて透明度を調整
-                            if selected_nodes:
-                                if len(selected_nodes) == 1:
-                                    edge_alpha = base_alpha if list(selected_nodes)[0] in [u, v] else 0.0  # 0.1から0.0に変更
-                                else:
-                                    edge_alpha = base_alpha if u in selected_nodes and v in selected_nodes else 0.0  # 0.1から0.0に変更
-                            else:
-                                edge_alpha = base_alpha
-
-                            nx.draw_networkx_edges(G, node_positions,  # posからnode_positionsに変更
-                                               edgelist=[(u, v)],
-                                               edge_color=[edge_colors[edge_idx]],
-                                               arrows=True,
-                                               arrowsize=20,
-                                               width=weight,
-                                               arrowstyle='-|>',
-                                               node_size=3000,
-                                               alpha=edge_alpha)
-
-                        # 自己結合を重みの降順でソート
-                        if self_edges:
-                            self_edges_with_weights = [(u, v, normalized_weights[i]) 
-                                                     for i, (u, v) in enumerate(non_zero_edges) if u == v]
-                            self_edges_with_weights.sort(key=lambda x: x[2], reverse=True)
-                            
-                            # 重みの大きい順に描画
-                            for u, v, weight in self_edges_with_weights:
-                                edge_idx = non_zero_edges.index((u, v))
-                                # シナプスオブジェクトを探す
-                                synapse_obj = None
-                                for obj in network.objects:
-                                    if isinstance(obj, Synapses) and obj.name == G[u][v]['name']:
-                                        synapse_obj = obj
-                                        break
-                                
-                                # 基本の透明度を接続確率に基づいて設定
-                                if synapse_obj is not None:
-                                    try:
-                                        p_value = synapse_obj.p
-                                        base_alpha = 0.2 + 0.6 * p_value  # p=0で0.2, p=1で0.8
-                                    except AttributeError:
-                                        base_alpha = 0.5  # デフォルト値
-                                else:
-                                    base_alpha = 0.5
-
-                                # 選択状態に応じて透明度を調整
-                                if selected_nodes:
-                                    if len(selected_nodes) == 1:
-                                        edge_alpha = base_alpha if list(selected_nodes)[0] == u else 0.0  # 0.1から0.0に変更
-                                    else:
-                                        edge_alpha = base_alpha if u in selected_nodes else 0.0  # 0.1から0.0に変更
-                                else:
-                                    edge_alpha = base_alpha
-
-                                nx.draw_networkx_edges(G, node_positions,  # posからnode_positionsに変更
-                                                   edgelist=[(u, v)],
-                                                   edge_color=[edge_colors[edge_idx]],
-                                                   arrows=True,
-                                                   arrowsize=15,
-                                                   width=weight,
-                                                   arrowstyle='-|>',
-                                                   node_size=3000,
-                                                   connectionstyle='arc3, rad=0.15',
-                                                   alpha=edge_alpha)
-                    
-                    # エッジラベルの辞書を作成（ホバー表示用）（重みが0でないエッジのみ）
-                    edge_labels = {}
-                    for u, v in non_zero_edges:
-                        # シナプスオブジェクトを探す
-                        synapse_obj = None
-                        for obj in network.objects:
-                            if isinstance(obj, Synapses) and obj.name == G[u][v]['name']:
-                                synapse_obj = obj
-                                break
-                        
-                        if synapse_obj is None:
-                            print(f"[WARNING] シナプス {G[u][v]['name']} のオブジェクトが見つかりません。")
-                            continue
-                        
-                        # 接続確率を取得（必ず存在するはず）
-                        try:
-                            p_value = synapse_obj.p
-                            if p_value is None:
-                                print(f"[WARNING] シナプス {synapse_obj.name} のp属性がNoneです。")
-                        except AttributeError:
-                            print(f"[WARNING] シナプス {synapse_obj.name} にp属性が存在しません。")
-                            print(f"[DEBUG] シナプスの属性一覧: {dir(synapse_obj)}")
-                            p_value = None
-                        
-                        p_str = f", p={p_value:.3f}" if p_value is not None else ""
-                        
-                        # 時定数を取得
-                        tau_value = None
-                        if 'tau' in synapse_obj.namespace:
-                            tau = synapse_obj.namespace['tau']
-                            if hasattr(tau, 'dim'):
-                                tau_value = float(tau/ms)  # msを単位として使用
-                            else:
-                                tau_value = float(tau)
-                        tau_str = f", τ={tau_value:.1f} ms" if tau_value is not None else ""
-                        
-                        edge_labels[(u, v)] = f"{G[u][v]['name']}\n(w={G[u][v]['weight']:.1f} {G[u][v]['weight_unit']}{p_str}{tau_str})"
-
-                # ノードの再描画
-                for node in neuron_nodes:
-                    node_alpha = 1.0  # デフォルトの透明度
-                    if selected_nodes:
-                        # 選択されたノードと関連するノードのみ強調表示
-                        node_alpha = 0.9 if node in selected_nodes else 0.2
-                    nx.draw_networkx_nodes(G, node_positions,
-                                       nodelist=[node],
-                                       node_color='skyblue',
-                                       node_size=3000,
-                                       edgecolors='black',
-                                       linewidths=2,
-                                       alpha=node_alpha)
-                
-                # ラベルの再描画
-                for node, label in labels.items():
-                    label_alpha = 1.0  # デフォルトの透明度
-                    if selected_nodes:
-                        # 選択されたノードと関連するノードのみ強調表示
-                        label_alpha = 1.0 if node in selected_nodes else 0.2
-                    ax.text(node_positions[node][0], node_positions[node][1], label,
-                           horizontalalignment='center', verticalalignment='center',
-                           fontsize=10, alpha=label_alpha)
-                
-                # タイトルと凡例の再描画
-                plt.title("Network Structure", fontsize=24, pad=20, fontweight='bold', fontfamily='Times New Roman')
-                neuron_patch = mpatches.Patch(color='skyblue', label='Neurons')
-                exc_line = mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-                inh_line = mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-                plt.legend(handles=[neuron_patch, exc_line, inh_line], fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
-                
-                fig.canvas.draw_idle()
             
             # 状態のリセット
             dragged_node[0] = None
@@ -1357,14 +1279,29 @@ def visualize_network(network):
 
     # タイトルと凡例
     plt.title("Network Structure", fontsize=24, pad=20, fontweight='bold', fontfamily='Times New Roman')
-    neuron_patch = mpatches.Patch(color='skyblue', label='Neurons')
-    exc_line = mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-    inh_line = mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)')
-    plt.legend(handles=[neuron_patch, exc_line, inh_line], fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
+    
+    # 凡例項目のリスト
+    legend_handles = [mpatches.Patch(color='skyblue', label='Neurons')]
+    
+    # カラム情報がある場合は追加
+    if column_numbers:
+        import matplotlib.cm as cm
+        colormap = cm.get_cmap('tab10', max(len(column_numbers), 1))
+        for i, col in enumerate(sorted(column_numbers)):
+            legend_handles.append(mpatches.Patch(color=colormap(i), label=f'Column {col}'))
+    
+    # シナプスの凡例
+    legend_handles.append(mpatches.Patch(color='red', label='Excitatory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+    legend_handles.append(mpatches.Patch(color='blue', label='Inhibitory Synapses\n(Line width: Weight\nOpacity: Connection probability)'))
+    
+    plt.legend(handles=legend_handles, fontsize=12, loc='center left', bbox_to_anchor=(1, 0.5))
     
     plt.axis('off')
     plt.tight_layout()
-
+    if save_path is not None:
+        plt.savefig(save_path)
+        mpld3.save_html(fig, save_path.replace(".png", ".html"))
+    return fig
 def assign_labels2neurons(spikemon, n_neuron:int, labels:list, input_labels:list, presentation_time, reset_time):
     """
     ニューロンにラベルを割り当てます。
@@ -1681,20 +1618,28 @@ def save_monitor(monitor, save_path, record_variables=None, compress=True):
 
 def load_monitor(file_path:str):
     """
-    pklファイル二保存されたモニターを読み込みます。以下のような方法で実際のモニター同様にデータを読み出せます。
+    pklファイルに保存されたモニターを読み込みます。以下のような方法で実際のモニター同様にデータを読み出せます。
     
     例：
     monitor = load_monitor(file_path)
     print(monitor.name)
     print(monitor.t)
     """
-    with open(file_path, "rb") as f:
-        monitor = pkl.load(f)
-
-    return monitor
+    try:
+        with open(file_path, "rb") as f:
+            try:
+                monitor = pkl.load(f)
+                # モニターデータの型チェック
+                if not isinstance(monitor, (SpikeMonitorData, StateMonitorData)):
+                    raise TypeError(f"ファイル {file_path} はモニターデータではありません。")
+                return monitor
+            except (pkl.UnpicklingError, EOFError) as e:
+                raise ValueError(f"ファイル {file_path} の解析に失敗しました: {str(e)}")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"ファイル {file_path} が見つかりません。")
 
 # ===================================== 分割してモニターを保存 ==========================================
-def save_all_monitors(save_path:str, network, index:int=None, compress=True):
+def save_all_monitors(network, save_path:str, index:int=None, compress=True):
     # NOTE 分割保存すると謎に恐ろしいほどメモリを消費するバグあり
     """
     ネットワーク内の全てのモニターを保存する関数。

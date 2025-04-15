@@ -117,11 +117,15 @@ class Normal_Synapse(Synapses):
             if "w_std" in params.keys():
                 del params["w_std"]
         else:
-            self.w_ave = params["w"]
-            if is_conductance:
-                self.w_std = 0*nS
+            if "w" in params.keys():
+                self.w_ave = params["w"]
+                if is_conductance:
+                    self.w_std = 0*nS
+                else:
+                    self.w_std = 0*pA
+                del params["w"]
             else:
-                self.w_std = 0*pA
+                raise ValueError("specify 'w_ave' or 'w_std' or 'w' for creating synapse")
         
         if "delay_ave" in params.keys() or "delay_std" in params.keys() :
             self.delay_ave = params["delay_ave"]
@@ -131,15 +135,25 @@ class Normal_Synapse(Synapses):
             if "delay_std" in params.keys():
                 del params["delay_std"]
         else:
-            self.delay_ave = params["delay"]
+            if "delay" in params.keys():
+                self.delay_ave = params["delay"]
+                del params["delay"]
+            else:
+                self.delay_ave = 0*ms
             self.delay_std = 0*ms
+        if "weighting_factor" in params.keys():
+            self.weighting_factor = float(params["weighting_factor"])
+            del params["weighting_factor"]
+        else:
+            self.weighting_factor = 1
         
-        super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, method="euler", namespace=dict(self.params), name=name, *args, **kwargs)
+        assert "w" not in params.keys(), "w is not allowed to be specified in params"
+        super().__init__(pre_neurons, post_neurons, model=self.model, on_pre=self.on_pre, method="euler", namespace=dict(params), name=name, *args, **kwargs)
         self.connect(connect, p=p)
         if is_conductance:
-            self.w = f"({self.w_ave/nS} + {self.w_std/nS} * randn()) * siemens"
+            self.w = f"({self.w_ave/nS} + {self.w_std/nS} * randn()) * nS * {float(self.weighting_factor)}"
         else:
-            self.w = f"({self.w_ave/pA} + {self.w_std/pA} * randn()) * pA"
+            self.w = f"({self.w_ave/pA} + {self.w_std/pA} * randn()) * pA * {float(self.weighting_factor)}"
         self.delay = f"({self.delay_ave/ms} + {self.delay_std/ms} * randn()) * ms"
 
         # 毎ステップでニューロンにシナプストレースを加算する

@@ -1,5 +1,6 @@
 from brian2 import *
 from Brian2_Framework.Tools import *
+import Brian2_Framework.Tools as tools  # toolsモジュールを直接参照するためのインポートを追加
 from Brian2_Framework.Plotters import *
 import tkinter as tk
 from tkinter import filedialog
@@ -89,21 +90,34 @@ def plot_monitor(file_paths):
     
     # ファイルの分類
     for file_path in file_paths:
-        monitor = tools.load_monitor(file_path)
-        if isinstance(monitor, SpikeMonitorData):
-            spike_monitors.append(monitor)
-        elif isinstance(monitor, StateMonitorData):
-            state_monitors.append(monitor)
+        try:
+            monitor = tools.load_monitor(file_path)
+            if isinstance(monitor, SpikeMonitorData):
+                spike_monitors.append(monitor)
+            elif isinstance(monitor, StateMonitorData):
+                state_monitors.append(monitor)
+            else:
+                tk.messagebox.showwarning("Warning", f"未対応のモニタータイプ: {file_path}")
+        except (FileNotFoundError, ValueError, TypeError) as e:
+            tk.messagebox.showerror("Error", f"モニターファイル {file_path} の読み込みに失敗しました: {str(e)}")
+            continue
+    
+    # モニターが1つも読み込めなかった場合は終了
+    if len(spike_monitors) == 0 and len(state_monitors) == 0:
+        tk.messagebox.showerror("Error", "有効なモニターファイルが見つかりませんでした。")
+        return
     
     # 全てのモニターから最大時間を取得
     max_simulation_time = 0
-    for file_path in file_paths:
-        monitor = tools.load_monitor(file_path)
+    for monitor in spike_monitors + state_monitors:
         if len(monitor.t) == 0:
-            tk.messagebox.showerror("Error", f"モニターファイル {file_path} にデータがありません。")
+            tk.messagebox.showwarning("Warning", f"モニター {monitor.name} にデータがありません。")
             continue
-        if isinstance(monitor, (SpikeMonitorData, StateMonitorData)):
-            max_simulation_time = max(max_simulation_time, float(monitor.t[-1]*1000))
+        max_simulation_time = max(max_simulation_time, float(monitor.t[-1]*1000))
+    
+    if max_simulation_time == 0:
+        tk.messagebox.showerror("Error", "有効なデータがモニターファイルに見つかりませんでした。")
+        return
     
     # プロットウィンドウの作成
     plot_window = tk.Toplevel(root)
@@ -131,15 +145,17 @@ def plot_monitor(file_paths):
         time_slider.pack(fill='x', padx=5)
     
     def plot_all():
-        global fig_spike, fig_state, on_spike_click, on_state_click
+        global fig_spike, on_spike_click
         
-        # 時間範囲の設定
+        # 時間範囲の設定（ミリ秒単位）
         if time_slider:
-            time_window = time_slider.get()
+            time_window = time_slider.get()  # ミリ秒単位の値
+            print(f"Time Window スライダー設定値: {time_window}ms")
         else:
             # 既存のプロットから時間範囲を取得
             first_fig = next(iter(all_active_figures))
             time_window = first_fig.get_axes()[0].get_xlim()[1]
+            print(f"既存プロットから取得した時間範囲: {time_window}ms")
         
         # 既存のプロットはそのままに、新しいプロットを追加
         new_figures = []
@@ -211,10 +227,17 @@ def plot_monitor(file_paths):
         
         for monitor in selected_state_monitors:
             selected_vars = [var for var, check in var_checks.items() if check.get()]
-            fig_state = state_plot(monitor, neuron_num=neuron_slider.get(), 
-                                         variable_names=selected_vars, 
-                                         time_end=time_window)
-            new_figures.append(fig_state)
+            print(f"StateMonitor: {monitor.name} をプロット、時間範囲: 0-{time_window}ms")
+            state_figs = state_plot(monitor, 
+                                   neuron_num=neuron_slider.get(), 
+                                   variable_names=selected_vars, 
+                                   time_end=time_window,  # ミリ秒単位
+                                   time_start=0)
+            # state_plot関数はfigのリストを返すので、リストを展開して追加
+            if isinstance(state_figs, list):
+                new_figures.extend(state_figs)
+            else:
+                new_figures.append(state_figs)
         
         # 新しいfigureがない場合は処理を終了
         if not new_figures:

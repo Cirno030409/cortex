@@ -1,6 +1,4 @@
 {
-    "n_samples": 0,
-    "epoch": 1,
     "max_rate": 60,
     "network_type": "Mini_column_biological",
     "network_scale": 1,
@@ -51,7 +49,7 @@
         "n_inh": 737
     },
 
-    "N_inp": 1000,
+    "N_inp": 225,
 
     "ex_fibers": {
         "num": {
@@ -174,6 +172,21 @@
                 "ave": "702.4*pA",
                 "std": "70.2*pA"
             }
+        },
+        "weighting_factor": {
+            "pv->pyr": 1,
+            "pyr->pv": 1,
+            "sst->pyr": 1,
+            "pyr->sst": 1,
+            "vip->pyr": 0.125,
+            "pyr->vip": 0.125,
+            "pv->pv": 1,
+            "sst->pv": 0.857,
+            "pv->sst": 0.857,
+            "vip->sst": 0.625,
+            "sst->vip": 1,
+            "pv->vip": 1,
+            "vip->pv": 1
         },
         "conn_probability": {
             "3inh":{

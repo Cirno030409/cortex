@@ -1,0 +1,4 @@
+{
+    "n_micro_circuit": 3,
+    "micro_circuit_params_path": "Brian2_Framework/parameters/Cortex_Microcircuit/params.json"
+}

@@ -11,9 +11,10 @@ import random
 import mplcursors
 from collections import deque
 import time
+import mpld3
     
 plt.rcParams["font.size"] = 20
-plt.rcParams["font.family"] = "Times New Roman"
+plt.rcParams["font.family"] = "Times New Roman"        
 
 def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0, save_path:str=None, smooth_window:int=None):
     """
@@ -31,115 +32,206 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         save_path (str): 保存するパスの指定（オプション）
         smooth_window (int): 移動平均のウィンドウサイズ（オプション）。指定すると発火率を平滑化
     """
-    if not isinstance(populationratemonitors, list):
-        populationratemonitors = [populationratemonitors]
-        
-    # time_endとtime_startから単位を削除
-    if hasattr(time_end, 'dimensions'):
-        time_end = float(time_end/ms)
-    if hasattr(time_start, 'dimensions'):
-        time_start = float(time_start/ms)
-        
-    # 全体のレート計算のためのデータを準備
-    all_times = []
-    all_rates = []
-    for mon in populationratemonitors:
-        times = mon.t/ms
-        rates = mon.rate/Hz
-        mask = (times >= time_start) & (times <= time_end)
-        all_times.append(times[mask])
-        all_rates.append(rates[mask])
+    def natural_sort_key(s):
+        import re
+        return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
     
-    # 共通の時間軸を作成（すべてのモニターの時間を結合してユニークな値を取得、ソート）
-    if all_times:
-        common_times = np.unique(np.concatenate(all_times))
-        common_times.sort()
-        
-        # 全体のレート計算（時間ポイントごとの平均）
-        total_rates = np.zeros_like(common_times)
-        for i, t in enumerate(common_times):
-            rates_at_t = []
-            for mon_idx, times in enumerate(all_times):
-                # 最も近い時間点を見つける
-                idx = np.abs(times - t).argmin()
-                if np.abs(times[idx] - t) < 1e-6:  # 十分に近い時間点があれば
-                    rates_at_t.append(all_rates[mon_idx][idx])
+    def plot_poprate_time_series_by_column(rates_mc, times, smooth_window=None):
+        """
+        カラム別のpopulation rateの時系列推移をプロットする内部関数
+        """
+        title = "Population Rate by Column (Only Excitatory Neurons)"
+        fig_columns = plt.figure(figsize=(14, 3 * len(rates_mc)))
+        fig_columns.canvas.manager.set_window_title(title)
+                
+        avg_rate = {}
+        for i, (key, rate) in enumerate(rates_mc.items()):
+            # 時間軸を準備
+            if isinstance(times, (int, float)):
+                times = np.array([times])
+            elif len(times) == 0:
+                continue
+            times = np.unique(times)
+            times.sort()
             
-            if rates_at_t:
-                total_rates[i] = np.mean(rates_at_t)
-        
-    # ウィンドウの高さを計算（1つのプロットあたり2インチ）
-    window_height = 2 * (len(populationratemonitors) + 1)  # +1 for total rate plot
-    # ディスプレイの高さの80%を超える場合は、複数のウィンドウに分割
-    max_height = plt.get_current_fig_manager().window.winfo_screenheight() * 0.8 / plt.rcParams['figure.dpi']
-    n_windows = max(1, int(np.ceil(window_height / max_height)))
-    
-    # 全体のレートプロットは別のウィンドウに表示
-    figs = []
-    
-    # 全体のレートプロット
-    if all_times:
-        fig_total = plt.figure(figsize=(14, 3))
-        fig_total.canvas.manager.set_window_title("Total Population Rate")
-        
-        # スムージング処理
-        if smooth_window is not None:
-            kernel = np.ones(smooth_window) / smooth_window
-            smoothed_total_rates = np.convolve(total_rates, kernel, mode='same')
-            line_smoothed = plt.plot(common_times, smoothed_total_rates, 'r-', label='Total (Smoothed)', linewidth=2)[0]
-            line_original = plt.plot(common_times, total_rates, 'r-', alpha=0.3, label='Total (Original)')[0]
-            plt.legend()
+            # サブプロットを作成
+            ax = plt.subplot(len(rates_mc), 1, i+1)
             
-            # カーソルを追加（スムージング済みデータのみ）
-            cursor_smoothed = mplcursors.cursor(line_smoothed, hover=True)
+            # スムージング処理
+            if smooth_window is not None:
+                kernel = np.ones(smooth_window) / smooth_window
+                smoothed_rates = np.convolve(rate, kernel, mode='same')
+                line = ax.plot(times, smoothed_rates, label=f'Column {key} (Smoothed)', 
+                              linewidth=2, color='black')[0]
+                ax.plot(times, rate, alpha=0.3, label=f'Column {key} (Original)', 
+                      color='black', linestyle='--')
+            else:
+                line = ax.plot(times, rate, label=f'Column {key}', 
+                              linewidth=2, color='black')[0]
             
-            @cursor_smoothed.connect("add")
-            def on_add(sel):
-                sel.annotation.set_text(f'Total (Smoothed)\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
-        else:
-            line = plt.plot(common_times, total_rates, 'r-', label='Total Rate', linewidth=2)[0]
+            ax.set_ylabel('Rate (Hz)')
+            ax.set_title(f'Column {key}', fontweight='bold')
+            ax.legend(loc='upper right')
+            
+            # グリッド線を追加して可読性を向上
+            ax.grid(True, linestyle='--', alpha=0.7)
+            
+            # 背景色を少し明るくして見やすくする
+            ax.set_facecolor('#f9f9f9')
+            
+            # 最後のサブプロットにx軸ラベルを追加
+            if i == len(rates_mc) - 1:
+                ax.set_xlabel('Time (ms)')
+            
+            # カーソルを追加
             cursor = mplcursors.cursor(line, hover=True)
             
             @cursor.connect("add")
-            def on_add(sel):
-                sel.annotation.set_text(f'Total\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
+            def on_add(sel, key=key):
+                sel.annotation.set_text(f'Column {key}\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
         
-        # 全体の平均発火率を計算
-        avg_rate = np.mean(total_rates)
-        plt.axhline(y=avg_rate, color='k', linestyle='--', label=f'Avg: {avg_rate:.2f}Hz')
-        plt.text(common_times[-1]*0.9, avg_rate*1.05, f'{avg_rate:.2f}Hz', fontsize=10)
+            # 全体の平均発火率を計算
+            avg_rate[key] = np.mean(rate)
+            avg_line = plt.axhline(y=avg_rate[key], color='k', linestyle='--', label=f'Avg: {avg_rate[key]:.2f}Hz')
+            plt.text(times[-1]*0.9, avg_rate[key]*1.05, f'{avg_rate[key]:.2f}Hz', 
+                   fontsize=15, fontweight='bold', bbox=dict(facecolor='white', alpha=0.7))
+
+        # サブプロット間の間隔を調整
+        plt.subplots_adjust(hspace=0.3)
         
-        plt.ylabel("Rate (Hz)")
-        plt.xlabel("Time (ms)")
-        plt.title("Total Population Rate (All Neurons)")
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
-        figs.append(fig_total)
+        # 全体のタイトル
+        plt.suptitle(title, fontsize=16, fontweight='bold')
+        # plt.tight_layout()
+        plt.subplots_adjust(top=0.95)  # タイトル用のスペースを確保
         
-        # 全体レートを別ファイルとして保存
-        if save_path:
-            base, ext = os.path.splitext(save_path)
-            total_save_path = f"{base}_total{ext}"
-            fig_total.savefig(total_save_path)
+        # グラフを保存
+        if save_path is not None:
+            column_save_path = save_path.replace('.png', '_by_column.png')
+            plt.savefig(column_save_path, dpi=150, bbox_inches='tight')
+            mpld3.save_html(fig_columns, column_save_path.replace(".png", ".html"))
+            print(f"保存しました: {column_save_path}")
+            print(f"保存しました: {column_save_path.replace('.png', '.html')}")
+        
+        return fig_columns, avg_rate
     
-    # 個々のポピュレーションのプロット
-    monitors_per_window = int(np.ceil(len(populationratemonitors) / n_windows))
-    for window_idx in range(n_windows):
-        start_idx = window_idx * monitors_per_window
-        end_idx = min((window_idx + 1) * monitors_per_window, len(populationratemonitors))
-        current_monitors = populationratemonitors[start_idx:end_idx]
+    def plot_poprate_by_column_bar_chart(avg_rate):
+        """
+        カラムごとの平均発火率を棒グラフでプロットする内部関数
+        """
+        title = "Average Firing Rate (Column-wise) (Only Excitatory Neurons)"
+        fig_bar = plt.figure(figsize=(10, 6))
+        fig_bar.canvas.manager.set_window_title(title)
         
+        column_names = list(avg_rate.keys())
+        column_names.sort(key=natural_sort_key)  # 既存のnatural_sort_keyを使用
+        rates = [avg_rate[name] for name in column_names]
+        
+        # 棒グラフの作成
+        bars = plt.bar(range(len(column_names)), rates, color='black')
+        
+        # x軸のラベルを設定
+        plt.xticks(range(len(column_names)), column_names)
+        
+        # 各バーの上に値を表示
+        for i, (bar, rate) in enumerate(zip(bars, rates)):
+            plt.text(i, rate + 0.5, 
+                    f'{rate:.2f}', ha='center', va='bottom', fontsize=12)
+        
+        plt.xlabel('Micro Circuit')
+        plt.ylabel('Average Firing Rate (Hz)')
+        plt.title(title)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        
+        # グラフを保存
+        if save_path is not None:
+            bar_save_path = save_path.replace('.png', '_bar_chart.png')
+            plt.savefig(bar_save_path)
+            mpld3.save_html(fig_bar, bar_save_path.replace(".png", ".html"))
+            print(f"保存しました: {bar_save_path}")
+            print(f"保存しました: {bar_save_path.replace('.png', '.html')}")
+        
+        plt.tight_layout()
+        return fig_bar
+    
+    def plot_poprate_by_layer_heatmap(all_rates):
+        """
+        層ごとの発火率をヒートマップでプロットする内部関数
+        """
+        title = "Average Firing Rate by Layer (Column-wise) (Only Excitatory Neurons)"
+        # カラム名を取得してソート
+        columns = list(all_rates.keys())
+        columns.sort(key=natural_sort_key)
+        
+        # 層の名前を取得（最初のカラムから）
+        layers = list(all_rates[columns[0]].keys())
+        # L23,L4,L5,L6の順番に並べる
+        layers = ["L23", "L4", "L5", "L6"]
+        
+        # 層ごとのサブプロットを作成
+        n_layers = len(layers)
+        fig = plt.figure(figsize=(14, 3*n_layers))
+        fig.canvas.manager.set_window_title(title)
+        
+        # ヒートマップデータの整形
+        heatmap = np.zeros((len(layers), len(columns)))
+        for i, layer in enumerate(layers):
+            for j, col in enumerate(columns):
+                if layer in all_rates[col]:
+                    if "pyr" in all_rates[col][layer].keys():
+                        heatmap[i, j] = np.mean(all_rates[col][layer]["pyr"])
+                    elif "exc" in all_rates[col][layer].keys():
+                        heatmap[i, j] = np.mean(all_rates[col][layer]["exc"])
+                    else:
+                        raise ValueError(f"Layer {layer} is not in all_rates[col][layer].keys()")
+                    
+        # ヒートマップのプロット
+        ax = plt.subplot(111)
+        im = ax.imshow(heatmap, cmap='viridis')
+        
+        # カラーバーを追加
+        cbar = fig.colorbar(im, ax=ax, pad=0.01)
+        cbar.set_label('Average Firing Rate (Hz)', rotation=270, labelpad=15, fontsize=25)
+        
+        # 各セルに値を表示
+        for i in range(len(layers)):
+            for j in range(len(columns)):
+                text = ax.text(j, i, f'{heatmap[i, j]:.2f}',
+                       ha="center", va="center", 
+                       fontsize=25,
+                       color="black" if heatmap[i, j] > np.max(heatmap)/2 else "white")
+        
+        # 軸ラベルの設定
+        # ラベルのフォントサイズ調整
+        ax.tick_params(axis='both', which='major')
+        ax.set_xticks(np.arange(len(columns)))  # x軸の位置を設定
+        ax.set_yticks(np.arange(len(layers)))   # y軸の位置を設定
+        ax.set_xticklabels(columns)             # x軸のラベルを設定
+        ax.set_yticklabels(layers)              # y軸のラベルを設定
+        
+        # 最後のサブプロットにx軸ラベルを追加
+        ax.set_xlabel('Micro Circuit')
+        ax.set_ylabel('Layer')
+        
+        # plt.tight_layout()
+        plt.suptitle(title, fontsize=25)
+        
+        # グラフを保存
+        if save_path is not None:
+            layers_save_path = save_path.replace('.png', '_layers_heatmap.png')
+            plt.savefig(layers_save_path)
+            mpld3.save_html(fig, layers_save_path.replace(".png", ".html"))
+            print(f"保存しました: {layers_save_path}")
+            print(f"保存しました: {layers_save_path.replace('.png', '.html')}")
+        
+        return fig
+    
+    def plot_popmon_time_series_by_allneurons(populationratemonitors, window_idx, current_monitors, window_title):
+        """
+        個々のポピュレーションをプロットする内部関数
+        """
         fig = plt.figure(figsize=(14, 2*len(current_monitors)))
-        
-        # ウィンドウタイトルの生成
-        if n_windows > 1:
-            window_title = f"Population Rate Plot ({window_idx+1}/{n_windows})"
-        else:
-            window_title = "Population Rate Plot"
-            
         fig.canvas.manager.set_window_title(window_title)
-            
+        
         for i, mon in enumerate(current_monitors):
             ax = plt.subplot(len(current_monitors), 1, i+1)
             
@@ -165,7 +257,7 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
                 def on_add(sel):
                     sel.annotation.set_text(f'Smoothed\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
             else:
-                line = plt.plot(times, rates)[0]
+                line = plt.plot(times, rates, color='black')[0]
                 cursor = mplcursors.cursor(line, hover=True)
                 
                 @cursor.connect("add")
@@ -174,8 +266,8 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
             
             # 平均発火率を計算して表示
             avg_rate = np.mean(rates)
-            plt.axhline(y=avg_rate, color='k', linestyle='--', label=f'Avg: {avg_rate:.2f}Hz')
-            plt.text(times[-1]*0.9, avg_rate*1.05, f'{avg_rate:.2f}Hz', fontsize=9)
+            plt.axhline(y=avg_rate, color='red', linestyle='--', label=f'Avg: {avg_rate:.2f}Hz')
+            plt.text(times[-1]*0.9, avg_rate*1.05, f'{avg_rate:.2f}Hz')
             
             # モニター名からレイヤー情報を抽出
             if hasattr(mon, 'name'):
@@ -192,19 +284,106 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
             
             plt.grid(True)
         
-        plt.suptitle(window_title, fontsize=16)
+        plt.suptitle(window_title, fontsize=20)
         plt.tight_layout()
-        figs.append(fig)
         
-    if save_path:
-        for i, fig in enumerate(figs[1:], 1):  # Skip the total rate plot which is already saved
+        if save_path is not None and window_idx > 0:
             if n_windows > 1:
                 base, ext = os.path.splitext(save_path)
-                current_save_path = f"{base}_{i}{ext}"
+                current_save_path = f"{base}_{window_idx}{ext}"
             else:
                 current_save_path = save_path
             fig.savefig(current_save_path)
-            
+            print(f"保存しました: {current_save_path}")
+        
+        return fig
+    
+    # メイン関数の処理開始
+    if not isinstance(populationratemonitors, list):
+        populationratemonitors = [populationratemonitors]
+        
+    # time_endとtime_startから単位を削除
+    if hasattr(time_end, 'dimensions'):
+        time_end = float(time_end/ms)
+    if hasattr(time_start, 'dimensions'):
+        time_start = float(time_start/ms)
+        
+    # 全体のレート計算のためのデータを準備
+    all_rates = {} # all_rates[mc_id][layer][neuron_type] = rates
+    rates_mc = {}
+    n_popmon_e = {} # 興奮性ニューロンのpopmonの数
+    
+    mc_enabled = False
+    # データ整形
+    for mon in populationratemonitors:
+        times = mon.t/ms
+        rates = mon.rate/Hz
+        mask = (times >= time_start) & (times <= time_end)
+        times = times[mask]
+        rates = rates[mask]
+        mc_id = mon.name.split('_')[0]
+        if mc_id not in rates_mc.keys():
+            rates_mc[mc_id] = np.zeros(len(times))
+            n_popmon_e[mc_id] = 0
+        if mc_id.startswith('M'):
+            mc_enabled = True
+            # ex: M1_popmon_L23_N_pyr
+            neuron_type = mon.name.split('_')[-1]
+            layer = mon.name.split('_')[2]
+            assert neuron_type == "pyr" or neuron_type == "pv" or neuron_type == "vip" or neuron_type == "sst" or neuron_type == "inh" or neuron_type == "exc", "poppulation rate plot: neuron type is not correct!(mc_id: {}, neuron_type: {})".format(mc_id, neuron_type)
+            assert layer == "L23" or layer == "L4" or layer == "L5" or layer == "L6", "poppulation rate plot: layer is not correct!(mc_id: {}, layer: {})".format(mc_id, layer)
+            # mc_idと層ごとにpopデータを保存
+            if mc_id not in all_rates.keys():
+                all_rates[mc_id] = {}
+            if layer not in all_rates[mc_id].keys():
+                all_rates[mc_id][layer] = {}
+            if neuron_type not in all_rates[mc_id][layer].keys():
+                all_rates[mc_id][layer][neuron_type] = rates
+            # mc_id毎にpyrニューロンのpoprateのデータを保存
+            if neuron_type == "pyr" or neuron_type == "exc":
+                print(f"mc_id: {mc_id}, layer: {layer}, neuron_type: {neuron_type}")
+                rates_mc[mc_id] += rates
+                n_popmon_e[mc_id] += 1
+    
+    figs = []
+    if mc_enabled:
+        for key in rates_mc.keys():
+            rates_mc[key] = rates_mc[key]/n_popmon_e[key]
+        
+        # カラム別population rateの推移プロット
+        fig_columns, avg_rate = plot_poprate_time_series_by_column(rates_mc, times, smooth_window)
+        figs.append(fig_columns)
+        
+        # カラムごとの平均発火率を棒グラフでプロット
+        if avg_rate:
+            fig_bar = plot_poprate_by_column_bar_chart(avg_rate)
+            figs.append(fig_bar)
+        
+        # 層別の発火率ヒートマップ
+        fig_heatmap = plot_poprate_by_layer_heatmap(all_rates)
+        figs.append(fig_heatmap)
+    
+    # ウィンドウのサイズを計算
+    window_height = 2 * (len(populationratemonitors) + 1)  # +1 for total rate plot
+    max_height = plt.get_current_fig_manager().window.winfo_screenheight() * 0.8 / plt.rcParams['figure.dpi'] # ディスプレイの高さの80%を超える場合は、複数のウィンドウに分割
+    n_windows = max(1, int(np.ceil(window_height / max_height)))
+    
+    # 個々のポピュレーションのプロット
+    monitors_per_window = int(np.ceil(len(populationratemonitors) / n_windows))
+    for window_idx in range(n_windows):
+        start_idx = window_idx * monitors_per_window
+        end_idx = min((window_idx + 1) * monitors_per_window, len(populationratemonitors))
+        current_monitors = populationratemonitors[start_idx:end_idx]
+        
+        # ウィンドウタイトルの生成
+        if n_windows > 1:
+            window_title = f"Population Rate Plot ({window_idx+1}/{n_windows})"
+        else:
+            window_title = "Population Rate Plot"
+        
+        fig = plot_popmon_time_series_by_allneurons(populationratemonitors, window_idx, current_monitors, window_title)
+        figs.append(fig)
+    
     return figs
 
     
@@ -214,6 +393,7 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
     リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
     表示する際には後ろにplt.show()が必要です。
     グラフを保存するには，保存するパスを渡します。
+    グラフは，pngとhtmlの2種類で保存されます。
 
     Args:
         spikemons (list of SpikeMonitor): スパイクモニターのリスト
@@ -229,99 +409,81 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
     if hasattr(time_start, 'dimensions'):
         time_start = float(time_start/ms)
         
-    # ウィンドウの高さを計算（1つのプロットあたり2インチ）
-    window_height = 2 * len(spikemons)
-    # ディスプレイの高さの80%を超える場合は、複数のウィンドウに分割
-    max_height = plt.get_current_fig_manager().window.winfo_screenheight() * 0.8 / plt.rcParams['figure.dpi']
-    n_windows = max(1, int(np.ceil(window_height / max_height)))
-    monitors_per_window = int(np.ceil(len(spikemons) / n_windows))
+    # すべてのスパイクモニターを1つのウィンドウに表示
+    fig = plt.figure(figsize=(14, 2*len(spikemons)))
+    window_title = "Raster plot"
+            
+    # レイヤー情報の抽出（安全に処理）
+    if all(hasattr(mon, 'name') for mon in spikemons):
+        layer_names = []
+        for mon in spikemons:
+            # モニター名を_で分割
+            name_parts = mon.name.split('_')
+            # L1, L23, L4などの層名を探す
+            layer = None
+            for part in name_parts:
+                if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
+                    layer = part
+                    break
+            if layer is not None:
+                layer_names.append(layer)
+        
+        # 重複を除去してソート
+        unique_layers = sorted(set(layer_names))
+        if unique_layers:  # 層名が見つかった場合のみ追加
+            window_title += f" - Layers: {', '.join(unique_layers)}"
     
-    figs = []
-    for window_idx in range(n_windows):
-        start_idx = window_idx * monitors_per_window
-        end_idx = min((window_idx + 1) * monitors_per_window, len(spikemons))
-        current_monitors = spikemons[start_idx:end_idx]
-        
-        fig = plt.figure(figsize=(14, 2*len(current_monitors)))
-        
-        # ウィンドウタイトルの生成
-        if n_windows > 1:
-            window_title = f"Raster plot ({window_idx+1}/{n_windows})"
-        else:
-            window_title = "Raster plot"
-            
-        # レイヤー情報の抽出（安全に処理）
-        if all(hasattr(mon, 'name') for mon in current_monitors):
-            layer_names = []
-            for mon in current_monitors:
-                # モニター名を_で分割
-                name_parts = mon.name.split('_')
-                # L1, L23, L4などの層名を探す
-                layer = None
-                for part in name_parts:
-                    if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
-                        layer = part
-                        break
-                if layer is not None:
-                    layer_names.append(layer)
-            
-            # 重複を除去してソート
-            unique_layers = sorted(set(layer_names))
-            if unique_layers:  # 層名が見つかった場合のみ追加
-                window_title += f" - Layers: {', '.join(unique_layers)}"
-        
-        plt.suptitle(window_title)
+    plt.suptitle(window_title)
+    try:
         fig.canvas.manager.set_window_title(window_title)
-        
-        # サブプロットを作成
-        axes = []
-        scatter_plots = []
-        for this_row in range(len(current_monitors)):
-            if this_row == 0:
-                ax = plt.subplot(len(current_monitors), 1, this_row+1)
-            else:
-                ax = plt.subplot(len(current_monitors), 1, this_row+1, sharex=axes[0])
-            axes.append(ax)
-            
-            scatter = ax.scatter(current_monitors[this_row].t/ms, current_monitors[this_row].i, 
-                               s=1, c='k', marker='.')
-            scatter_plots.append(scatter)
-            
-            if this_row+1 == len(current_monitors):
-                ax.set_xlabel('Time (ms)')
-            ax.set_xlim(time_start, time_end)
-            ax.set_ylim(-1, len(current_monitors[this_row].source))
-            ax.set_ylabel('Neuron index')
-            if hasattr(current_monitors[this_row], 'name'):
-                ax.set_title(current_monitors[this_row].name)
-            else:
-                ax.set_title(f"Monitor {this_row}")
-        
-        # 各スキャッタープロットにカーソルを追加
-        for scatter in scatter_plots:
-            cursor = mplcursors.cursor(scatter, hover=False)
-            
-            @cursor.connect("add")
-            def on_add(sel):
-                neuron_idx = int(sel.target[1])
-                time = sel.target[0]
-                sel.annotation.set_text(f'Neuron: {neuron_idx}\nTime: {time:.2f}ms')
-                sel.annotation.xy = (sel.target[0], sel.target[1])
-        
-        plt.subplots_adjust(hspace=0.7)
-        plt.tight_layout()
-        
-        if save_path is not None:
-            if n_windows > 1:
-                base, ext = os.path.splitext(save_path)
-                window_save_path = f"{base}_window{window_idx+1}{ext}"
-            else:
-                window_save_path = save_path
-            plt.savefig(window_save_path)
-        
-        figs.append(fig)
+    except AttributeError:
+        # 非対話型バックエンドの場合は処理をスキップ
+        pass
     
-    return figs
+    # サブプロットを作成
+    axes = []
+    scatter_plots = []
+    for this_row in range(len(spikemons)):
+        if this_row == 0:
+            ax = plt.subplot(len(spikemons), 1, this_row+1)
+        else:
+            ax = plt.subplot(len(spikemons), 1, this_row+1, sharex=axes[0])
+        axes.append(ax)
+        
+        scatter = ax.scatter(spikemons[this_row].t/ms, spikemons[this_row].i, 
+                           s=1, c='k', marker='.')
+        scatter_plots.append(scatter)
+        
+        if this_row+1 == len(spikemons):
+            ax.set_xlabel('Time (ms)')
+        ax.set_xlim(time_start, time_end)
+        ax.set_ylim(-1, len(spikemons[this_row].source))
+        ax.set_ylabel('Neuron index')
+        if hasattr(spikemons[this_row], 'name'):
+            ax.set_title(spikemons[this_row].name)
+        else:
+            ax.set_title(f"Monitor {this_row}")
+    
+    # 各スキャッタープロットにカーソルを追加
+    for scatter in scatter_plots:
+        cursor = mplcursors.cursor(scatter, hover=False)
+        
+        @cursor.connect("add")
+        def on_add(sel):
+            neuron_idx = int(sel.target[1])
+            time = sel.target[0]
+            sel.annotation.set_text(f'Neuron: {neuron_idx}\nTime: {time:.2f}ms')
+            sel.annotation.xy = (sel.target[0], sel.target[1])
+    
+    plt.subplots_adjust(hspace=0.7)
+    plt.tight_layout()
+    
+    if save_path is not None:
+        plt.savefig(save_path)
+        mpld3.save_html(fig, save_path.replace(".png", ".html"))
+        print(f"保存しました: {save_path}")
+        print(f"保存しました: {save_path.replace('.png', '.html')}")
+    return [fig]
 
 def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuron_num:int=0, variable_names:list=None, save_path:str=None):
     """
@@ -339,11 +501,16 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
         time_start (int): プロットする時間の開始範囲(ms)
         time_end (int): プロットする時間の終了範囲(ms)
     """        
-    # time_endとtime_startから単位を削除
+    
+    # time_endとtime_startから単位を削除し、確実にms単位に統一
     if hasattr(time_end, 'dimensions'):
-        time_end = float(time_end/ms)
+        time_end = float(time_end/ms)  # ms単位に変換
     if hasattr(time_start, 'dimensions'):
-        time_start = float(time_start/ms)
+        time_start = float(time_start/ms)  # ms単位に変換
+    
+    # time_startとtime_endは常にミリ秒単位とする
+    time_start_ms = time_start
+    time_end_ms = time_end
     
     # statemonがリストでない場合はリストに変換
     if not isinstance(statemon, list):
@@ -405,12 +572,26 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                 if var == "Ie-Ii" and "Ie" in monitor_vars and "Ii" in monitor_vars:
                     data = getattr(monitor, "Ie")[neuron_num] - getattr(monitor, "Ii")[neuron_num]
                     if len(data) > 0:
-                        y_data_unit = data.get_best_unit()
-                        data_scaled = data/y_data_unit
+                        # 単位情報の取得方法を改善
+                        if hasattr(data, 'get_best_unit'):
+                            # Brian2のQuantityオブジェクトの場合
+                            y_data_unit = data.get_best_unit()
+                            data_scaled = data/y_data_unit
+                        else:
+                            # numpyの場合はそのまま使用
+                            y_data_unit = 1  # スケーリングなし
+                            data_scaled = data
                         y_min = min(y_min, np.min(data_scaled))
                         y_max = max(y_max, np.max(data_scaled))
                         
-                        line = ax.plot(monitor.t/ms, data_scaled, color="g", label="E-I")[0]
+
+                        # その他の場合（numpy配列など）
+                        try:
+                            t_axis = monitor.t/ms
+                        except:
+                            t_axis = monitor.t
+                        
+                        line = ax.plot(t_axis, data_scaled, color="g", label="E-I")[0]
                         ax.axhline(y=0, color='gray', linestyle='--', alpha=1)
                         line_plots.append((line, var))
                         has_valid_data = True
@@ -419,9 +600,25 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                     try:
                         data = getattr(monitor, var)[neuron_num]
                         if len(data) > 0:
+                            # 単位情報の取得方法を改善
                             if y_data_unit is None:
-                                y_data_unit = data.get_best_unit()
-                            data_scaled = data/y_data_unit
+                                if hasattr(data, 'get_best_unit'):
+                                    # Brian2のQuantityオブジェクトの場合
+                                    y_data_unit = data.get_best_unit()
+                                elif hasattr(monitor, 'get_best_unit'):
+                                    # StateMonitorDataオブジェクトの場合
+                                    y_data_unit = monitor.get_best_unit(var)
+                                else:
+                                    # 単位情報がない場合
+                                    y_data_unit = 1  # スケーリングなし
+                            
+                            # データのスケーリング
+                            try:
+                                data_scaled = data/y_data_unit
+                            except:
+                                # numpyの場合はそのまま
+                                data_scaled = data
+                            
                             y_min = min(y_min, np.min(data_scaled))
                             y_max = max(y_max, np.max(data_scaled))
                             
@@ -434,7 +631,14 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                             else:
                                 color = "k"
                                 label = var
-                            line = ax.plot(monitor.t/ms, data_scaled, color=color, label=label)[0]
+                            
+                            # 時間軸の単位処理
+                            try:
+                                t_axis = monitor.t/ms
+                            except:
+                                t_axis = monitor.t
+                            
+                            line = ax.plot(t_axis, data_scaled, color=color, label=label)[0]
                             line_plots.append((line, var))
                             has_valid_data = True
                             y_data_values.extend(data_scaled)
@@ -450,10 +654,16 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                 ax.set_ylim(y_min - margin, y_max + margin)
                 
                 # 単位を含む軸ラベルを設定
-                unit_str = str(y_data_unit)
+                if hasattr(y_data_unit, '__str__'):
+                    unit_str = str(y_data_unit)
+                else:
+                    unit_str = str(y_data_unit)
+                
+                # 単位表示の改善
                 if unit_str == '1':
                     ax.set_ylabel(plot_name)
                 else:
+                    # StateMonitorDataオブジェクトの場合、単位が文字列
                     ax.set_ylabel(f'{plot_name} ({unit_str})')
             else:
                 # データが存在しない場合はデフォルトの範囲を設定
@@ -464,11 +674,21 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                         transform=ax.transAxes)
 
             if len(vars_to_plot) > 1:
-                ax.legend()
+                # ラベル付きの線があるか確認してから凡例を表示
+                has_labeled_artists = False
+                for artist in ax.get_children():
+                    if hasattr(artist, 'get_label') and not artist.get_label().startswith('_'):
+                        has_labeled_artists = True
+                        break
+                
+                if has_labeled_artists:
+                    ax.legend()
                 
             if this_row+1 == len(plot_vars):
                 ax.set_xlabel('Time (ms)')
-            ax.set_xlim(time_start, time_end)
+            
+            # 適切な時間範囲を設定
+            ax.set_xlim(time_start_ms, time_end_ms)
         
         # 各線プロットにカーソルを追加
         for line, var_name in line_plots:
@@ -495,10 +715,12 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
             else:
                 monitor_save_path = save_path
             plt.savefig(monitor_save_path)
+            mpld3.save_html(fig, monitor_save_path.replace(".png", ".html"))
+            print(f"保存しました: {monitor_save_path}")
+            print(f"保存しました: {monitor_save_path.replace('.png', '.html')}")
         figs.append(fig)
     
     return figs
-    return fig
     
 def weight_plot_1_neuron(synapse, neuron_idx, n_pre, n_post):
     """
@@ -584,10 +806,11 @@ def weight_plot(synapse, n_pre, n_post, title="", save_fig=False, save_path:str=
                 os.remove(f)
                 print(f"\tDeleted {f}")
         plt.savefig(save_path + f"{n_this_fig}.png")
+        print(f"保存しました: {os.path.join(save_path, f'wta_response_{n_this_fig}.png')}")
         
         plt.clf()
-        plt.close()   
-        
+        plt.close()
+    
 def firing_rate_heatmap(spikemon, start_time, end_time, save_fig=False, save_path:str=None, n_this_fig=None):
     """
     与えられたスパイクモニターから発火率のヒートマップを描画します。
@@ -624,6 +847,7 @@ def firing_rate_heatmap(spikemon, start_time, end_time, save_fig=False, save_pat
     
     if save_path is not None:
         plt.savefig(os.path.join(save_path, f'{n_this_fig}_count_heatmap.png'), dpi=300, bbox_inches='tight')
+        print(f"保存しました: {os.path.join(save_path, f'{n_this_fig}_count_heatmap.png')}")
     else:
         plt.show()
     
@@ -722,11 +946,12 @@ def visualize_wta_response(input_image, synapse, spikemon, start_time:int, expos
     if save_path is not None:
         os.makedirs(save_path, exist_ok=True)
         plt.savefig(os.path.join(save_path, f'wta_response_{n_this_fig}.png'))
+        print(f"保存しました: {os.path.join(save_path, f'wta_response_{n_this_fig}.png')}")
         plt.close()
     
     return fig
 
-def plot_all_monitors(network, time_end:int, time_start:int=0, save_path:str=None, smooth_window:int=None):
+def plot_all_monitors(network, time_end:int=None, time_start:int=0, save_dir_path:str=None, smooth_window:int=None, monitor_type:list=None):
     """
     ネットワーク内のすべてのスパイクモニター、ステートモニター、ポピュレーションレートモニターを描画します。
 
@@ -734,12 +959,25 @@ def plot_all_monitors(network, time_end:int, time_start:int=0, save_path:str=Non
         network (dict or Network): ネットワークの辞書またはNetworkオブジェクト
         time_end (int): プロットする時間の終了範囲(ms)
         time_start (int): プロットする時間の開始範囲(ms)
-        save_path (str): 保存するパスの指定（オプション）
+        save_dir_path (str): 保存するパスの指定（オプション）
+        smooth_window (int): ポピュレーションレートモニターの平滑化ウィンドウサイズ（オプション）
+        monitor_type (list): 描画するモニターのタイプのリスト。"popmon", "spikemon", "statemon", "all"のいずれかを含む。
+                           デフォルトは["all"]で、すべてのタイプのモニターを描画します。
     """
+    # monitor_typeのデフォルト値を設定
+    if monitor_type is None:
+        monitor_type = ["all"]
+    
+    # 文字列で渡された場合はリストに変換
+    if isinstance(monitor_type, str):
+        monitor_type = [monitor_type]
+    
     # 各種モニターを分類
     spike_monitors = []
     state_monitors = []
     population_rate_monitors = []
+    if time_end is None:
+        time_end = network.t
     
     # ネットワークがdictの場合とNetworkオブジェクトの場合で処理を分ける
     if hasattr(network, 'items'):  # dictの場合
@@ -764,65 +1002,72 @@ def plot_all_monitors(network, time_end:int, time_start:int=0, save_path:str=Non
             elif isinstance(value, PopulationRateMonitor):
                 population_rate_monitors.append(value)
     
-    # スパイクモニターを層ごとにグループ化
-    layer_groups = {"other": []}  # 層名がないモニターはotherグループに入れる
+    figs = []
     
-    for monitor in spike_monitors:
-        if hasattr(monitor, 'name'):
-            # モニター名を_で分割
-            name_parts = monitor.name.split('_')
-            # L1, L23, L4などの層名を探す
-            layer = None
-            for part in name_parts:
-                if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
-                    layer = part
-                    break
-            
-            if layer is not None:
-                if layer not in layer_groups:
-                    layer_groups[layer] = []
-                layer_groups[layer].append(monitor)
+    # monitor_typeリストに基づいて描画するモニターを選択
+    if "all" in monitor_type or "spikemon" in monitor_type:
+        # スパイクモニターを層ごとにグループ化
+        layer_groups = {"other": []}  # 層名がないモニターはotherグループに入れる
+        
+        for monitor in spike_monitors:
+            if hasattr(monitor, 'name'):
+                # モニター名を_で分割
+                name_parts = monitor.name.split('_')
+                # L1, L23, L4などの層名を探す
+                layer = None
+                for part in name_parts:
+                    if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
+                        layer = part
+                        break
+                
+                if layer is not None:
+                    if layer not in layer_groups:
+                        layer_groups[layer] = []
+                    layer_groups[layer].append(monitor)
+                else:
+                    layer_groups["other"].append(monitor)
             else:
                 layer_groups["other"].append(monitor)
-        else:
-            layer_groups["other"].append(monitor)
-    
-    # 空のグループを削除
-    layer_groups = {k: v for k, v in layer_groups.items() if v}
-    
-    # 層ごとにソートしてプロット（otherは最後に）
-    figs = []
-    # まず層を持つグループを処理
-    sorted_layers = sorted([layer for layer in layer_groups.keys() if layer != "other"])
-    
-    # 層を持つグループを処理
-    for layer in sorted_layers:
-        if save_path is not None:
-            layer_save_path = os.path.join(save_path, f'raster_plot_{layer}.png')
-        else:
-            layer_save_path = None
-        figs.extend(raster_plot(layer_groups[layer], time_end=time_end, time_start=time_start, save_path=layer_save_path))
-    
-    # otherグループを処理
-    if "other" in layer_groups:
-        if save_path is not None:
-            other_save_path = os.path.join(save_path, 'raster_plot_other.png')
-        else:
-            other_save_path = None
-        figs.extend(raster_plot(layer_groups["other"], time_end=time_end, time_start=time_start, save_path=other_save_path))
+        
+        # 空のグループを削除
+        layer_groups = {k: v for k, v in layer_groups.items() if v}
+        
+        # 層ごとにソートしてプロット（otherは最後に）
+        # まず層を持つグループを処理
+        sorted_layers = sorted([layer for layer in layer_groups.keys() if layer != "other"])
+        
+        # 層を持つグループを処理
+        for layer in sorted_layers:
+            if save_dir_path is not None:
+                layer_save_path = os.path.join(save_dir_path, f'raster_plot_{layer}.png')
+                print(f"保存パス: {layer_save_path}")
+            else:
+                layer_save_path = None
+            figs.extend(raster_plot(layer_groups[layer], time_end=time_end, time_start=time_start, save_path=layer_save_path))
+        
+        # otherグループを処理
+        if "other" in layer_groups:
+            if save_dir_path is not None:
+                other_save_path = os.path.join(save_dir_path, 'raster_plot_other.png')
+                print(f"保存パス: {other_save_path}")
+            else:
+                other_save_path = None
+            figs.extend(raster_plot(layer_groups["other"], time_end=time_end, time_start=time_start, save_path=other_save_path))
     
     # ステートモニターをプロット
-    if state_monitors:
-        if save_path is not None:
-            state_save_path = os.path.join(save_path, 'state_plot.png')
+    if ("all" in monitor_type or "statemon" in monitor_type) and state_monitors:
+        if save_dir_path is not None:
+            state_save_path = os.path.join(save_dir_path, 'state_plot.png')
+            print(f"保存パス: {state_save_path}")
         else:
             state_save_path = None
         figs.extend(state_plot(state_monitors, time_end=time_end, time_start=time_start, save_path=state_save_path))
 
     # ポピュレーションレートモニターをプロット
-    if population_rate_monitors:
-        if save_path is not None:
-            poprate_save_path = os.path.join(save_path, 'population_rate_plot.png')
+    if ("all" in monitor_type or "popmon" in monitor_type) and population_rate_monitors:
+        if save_dir_path is not None:
+            poprate_save_path = os.path.join(save_dir_path, 'population_rate_plot.png')
+            print(f"保存パス: {poprate_save_path}")
         else:
             poprate_save_path = None
         figs.extend(population_rate_plot(population_rate_monitors, time_end=time_end, time_start=time_start, save_path=poprate_save_path, smooth_window=smooth_window))
