@@ -1,5 +1,4 @@
 {
-    "max_rate": 60,
     "network_type": "Mini_column_biological",
     "network_scale": 1,
     "monitor":{
@@ -26,7 +25,10 @@
         "L23_N_noise_to_pyr": true,
         "L4_N_exc": true,
         "L5_N_exc": true,
-        "L6_N_exc": true
+        "L6_N_exc": true,
+        "L4_N_inh": true,
+        "L5_N_inh": true,
+        "L6_N_inh": true
     },
     "L23" : {
         "n_pyr": 5171,
@@ -49,14 +51,16 @@
         "n_inh": 737
     },
 
-    "N_inp": 225,
+    "N_inp": 902,
 
     "ex_fibers": {
+        "enable": true,
         "num": {
             "L23": {"pyr": 1600, "inh": 1500},
             "L4": {"exc": 2100, "inh": 1900},
             "L5": {"exc": 2000, "inh": 1900},
-            "L6": {"exc": 2900, "inh": 2100}
+            "L6": {"exc": 2900, "inh": 2100},
+            "scaler": 1
         },
         "rate": {
             "L23": {
@@ -186,10 +190,12 @@
             "vip->sst": 0.625,
             "sst->vip": 1,
             "pv->vip": 1,
-            "vip->pv": 1
+            "vip->pv": 1,
+            "pyr->all": 1,
+            "pyr->pyr": 0.2
         },
         "conn_probability": {
-            "3inh":{
+            "inter_column":{
                 "pyr->sst": 0.002,
                 "pyr->pv": 0.009,
                 "pv->pyr": 0.046,

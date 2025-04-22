@@ -14,7 +14,6 @@ import re
 from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
 from brian2 import SpikeMonitor
 import matplotlib
-matplotlib.use('TkAgg')  # または 'Qt5Agg'
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from brian2.units import *
@@ -22,6 +21,15 @@ from matplotlib.widgets import Button
 import mpld3
 plt.rcParams["font.size"] = 15
 plt.rcParams["font.family"] = "Times New Roman"
+
+# GUIが使えない環境の場合はmatplotlibのバックエンドをnon-GUI modeに設定
+import matplotlib
+try:
+    matplotlib.use("TkAgg")
+except:
+    print("GUI環境が検出されなかったため、matplotlibのバックエンドをnon-GUI modeに設定しました")
+    matplotlib.use("Agg")
+
 
 def print_simulation_start():
     """
@@ -1594,7 +1602,7 @@ def save_monitor(monitor, save_path, record_variables=None, compress=True):
     モニターデータを保存する関数
     
     Args:
-        monitor: Brian2のSpikeMonitorまたはStateMonitor
+        monitor: Brian2のSpikeMonitor、StateMonitor、PopulationRateMonitor
         save_path (str): 保存先のパス
         record_variables (list, optional): StateMonitorの場合の記録変数リスト
         compress (bool): 圧縮して保存するかどうか（デフォルト：True）
@@ -1604,12 +1612,16 @@ def save_monitor(monitor, save_path, record_variables=None, compress=True):
             monitor_data = SpikeMonitorData(monitor)
         elif isinstance(monitor, StateMonitor):
             monitor_data = StateMonitorData(monitor, monitor.record_variables)
+        elif isinstance(monitor, PopulationRateMonitor):
+            monitor_data = PopulationRateMonitorData(monitor)
         elif isinstance(monitor, SpikeMonitorData):
             monitor_data = monitor
         elif isinstance(monitor, StateMonitorData):
             monitor_data = monitor
+        elif isinstance(monitor, PopulationRateMonitorData):
+            monitor_data = monitor
         else:
-            raise ValueError("保存できるモニターはSpikeMonitor, StateMonitor, SpikeMonitorData, StateMonitorDataのみです。")
+            raise ValueError("保存できるモニターはSpikeMonitor, StateMonitor, PopulationRateMonitor, SpikeMonitorData, StateMonitorData, PopulationRateMonitorDataのみです。")
         
         if compress:
             pkl.dump(monitor_data, f, protocol=pkl.HIGHEST_PROTOCOL)
@@ -1639,7 +1651,7 @@ def load_monitor(file_path:str):
         raise FileNotFoundError(f"ファイル {file_path} が見つかりません。")
 
 # ===================================== 分割してモニターを保存 ==========================================
-def save_all_monitors(network, save_path:str, index:int=None, compress=True):
+def save_all_monitors(network, save_path:str, index:int=None, compress=True, smooth_window=None):
     # NOTE 分割保存すると謎に恐ろしいほどメモリを消費するバグあり
     """
     ネットワーク内の全てのモニターを保存する関数。
@@ -1652,6 +1664,7 @@ def save_all_monitors(network, save_path:str, index:int=None, compress=True):
         network (Network): モニターを含むネットワーク
         index (int, optional): 分割保存時のインデックス
         compress (bool): 圧縮して保存するかどうか
+        smooth_window (int, optional): PopulationRateMonitorのスムージングウィンドウサイズ
     """
     os.makedirs(save_path, exist_ok=True)
     for item in network.objects:
@@ -1678,6 +1691,24 @@ def save_all_monitors(network, save_path:str, index:int=None, compress=True):
                 # 新しいモニターを作成して追加
                 new_statemon = StateMonitor(item.source, item.record_variables, record=True, name=item.name)
                 network.add(new_statemon)
+                
+        elif isinstance(item, PopulationRateMonitor):
+            if index is None:
+                if smooth_window is not None:
+                    # スムージングを適用
+                    item.smooth_rate(window="gaussian", width=smooth_window)
+                save_monitor(item, os.path.join(save_path, f"{item.name}.pkl"), compress=compress)
+            else:
+                os.makedirs(os.path.join(save_path, item.name), exist_ok=True)
+                if smooth_window is not None:
+                    # スムージングを適用
+                    item.smooth_rate(window="gaussian", width=smooth_window)
+                save_monitor(item, os.path.join(save_path, item.name, f"{index}.pkl"), compress=compress)
+                # 既存のモニターを削除
+                network.remove(item)
+                # 新しいモニターを作成して追加
+                new_popmon = PopulationRateMonitor(item.source, name=item.name)
+                network.add(new_popmon)
 
 def merge_separated_monitors(dir_path:str):
     """

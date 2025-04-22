@@ -16,7 +16,7 @@ class Current_LIF_Neuron(NeuronGroup):
         self.params = params
         self.model = """
             dv/dt = ((v_rest - v) + (Ie - Ii + I_noise) * rm) / taum : volt (unless refractory)
-            dtheta/dt = -theta/tautheta : volt
+            dtheta/dt = -theta/tautheta : volt 
             Ie : amp
             Ii : amp
             I_noise : amp

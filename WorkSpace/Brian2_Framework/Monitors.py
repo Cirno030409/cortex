@@ -37,6 +37,75 @@ class SpikeMonitorData():
         self.spike_trains = {**self.spike_trains, **monitor.spike_trains}
         self.num_spikes = self.num_spikes + monitor.num_spikes
 
+
+class PopulationRateMonitorData():
+    """
+    PopulationRateMonitorのデータを保存するためのクラス
+    pickleで保存できるようにするために実装。
+    ニューロン群の発火率データを保存します。
+    """
+    def __init__(self, monitor):
+        self.name = monitor.name
+        
+        # 時間データの処理と保存
+        if hasattr(monitor.t, "dimensions"):
+            # 単位を取得
+            unit = monitor.t.get_best_unit()
+            if str(unit) == "s":  # 秒単位の場合はミリ秒に変換
+                self.t = np.array(monitor.t / second * 1000)  # 秒からミリ秒へ変換
+                self.t_unit = "ms"
+            else:
+                self.t = np.array(monitor.t)
+                self.t_unit = str(unit)
+        else:
+            # すでにnumpy配列の場合
+            self.t = np.array(monitor.t)
+            self.t_unit = "ms"  # デフォルトはミリ秒とする
+        
+        # 発火率データの処理と保存
+        if hasattr(monitor.rate, "dimensions"):
+            # 単位を取得
+            unit = monitor.rate.get_best_unit()
+            self.rate = np.array(monitor.rate)
+            self.rate_unit = str(unit)
+        else:
+            # すでにnumpy配列の場合
+            self.rate = np.array(monitor.rate)
+            self.rate_unit = "Hz"  # デフォルトはヘルツとする
+        
+        self.source = [0] * len(monitor.source)
+        
+    def extend(self, monitor):
+        """
+        モニターのデータを結合します。
+        
+        Args:
+            monitor (PopulationRateMonitorData): 結合するモニター
+        """
+        self.t = np.concatenate([self.t, monitor.t])
+        self.rate = np.concatenate([self.rate, monitor.rate])
+        
+        # 単位が異なる場合は警告を表示
+        if hasattr(monitor, "rate_unit") and self.rate_unit != monitor.rate_unit:
+            print(f"[WARNING] 発火率の単位が異なります。{self.rate_unit} と {monitor.rate_unit}")
+    
+    def get_best_unit(self, var=None):
+        """
+        変数の最適な単位を返します。
+        
+        Args:
+            var (str): 単位を取得する変数名。"rate"の場合は発火率の単位を、
+                      Noneまたはその他の場合は時間の単位を返します。
+            
+        Returns:
+            str: 単位を表す文字列
+        """
+        if var == "rate":
+            return self.rate_unit
+        else:
+            return self.t_unit
+
+
 class StateMonitorData():
     """
     StateMonitorのデータを保存するためのクラス

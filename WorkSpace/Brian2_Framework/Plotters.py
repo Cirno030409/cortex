@@ -14,7 +14,16 @@ import time
 import mpld3
     
 plt.rcParams["font.size"] = 20
-plt.rcParams["font.family"] = "Times New Roman"        
+plt.rcParams["font.family"] = "Times New Roman"
+
+# GUIが使えない環境の場合はmatplotlibのバックエンドをnon-GUI modeに設定
+import matplotlib
+try:
+    matplotlib.use("TkAgg")
+except:
+    print("GUI環境が検出されなかったため、matplotlibのバックエンドをnon-GUI modeに設定")
+    matplotlib.use("Agg")     
+
 
 def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0, save_path:str=None, smooth_window:int=None):
     """
@@ -41,7 +50,7 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         カラム別のpopulation rateの時系列推移をプロットする内部関数
         """
         title = "Population Rate by Column (Only Excitatory Neurons)"
-        fig_columns = plt.figure(figsize=(14, 3 * len(rates_mc)))
+        fig_columns = plt.figure(figsize=(14, 3.3 * len(rates_mc)))
         fig_columns.canvas.manager.set_window_title(title)
                 
         avg_rate = {}
@@ -92,25 +101,26 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
             # 全体の平均発火率を計算
             avg_rate[key] = np.mean(rate)
-            avg_line = plt.axhline(y=avg_rate[key], color='k', linestyle='--', label=f'Avg: {avg_rate[key]:.2f}Hz')
+            avg_line = plt.axhline(y=avg_rate[key], color='k', linestyle='--', label=f'Avg: {avg_rate[key]:.2f}Hz', linewidth=1)
             plt.text(times[-1]*0.9, avg_rate[key]*1.05, f'{avg_rate[key]:.2f}Hz', 
-                   fontsize=15, fontweight='bold', bbox=dict(facecolor='white', alpha=0.7))
+                   fontsize=15, fontweight='bold', bbox=dict(facecolor='white', alpha=0.7), color='black')
 
         # サブプロット間の間隔を調整
-        plt.subplots_adjust(hspace=0.3)
+        plt.subplots_adjust(hspace=0.5)
         
         # 全体のタイトル
         plt.suptitle(title, fontsize=16, fontweight='bold')
-        # plt.tight_layout()
         plt.subplots_adjust(top=0.95)  # タイトル用のスペースを確保
         
         # グラフを保存
         if save_path is not None:
-            column_save_path = save_path.replace('.png', '_by_column.png')
-            plt.savefig(column_save_path, dpi=150, bbox_inches='tight')
-            mpld3.save_html(fig_columns, column_save_path.replace(".png", ".html"))
+            base, ext = os.path.splitext(save_path)
+            column_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_by_column{ext}"))
+            plt.savefig(column_save_path, dpi=300)  # 解像度を300dpiに設定
+            html_path = os.path.normpath(os.path.join(os.path.dirname(column_save_path), f"{os.path.basename(column_save_path).replace('.png', '')}.html"))
+            mpld3.save_html(fig_columns, html_path)
             print(f"保存しました: {column_save_path}")
-            print(f"保存しました: {column_save_path.replace('.png', '.html')}")
+            print(f"保存しました: {html_path}")
         
         return fig_columns, avg_rate
     
@@ -134,7 +144,7 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
         # 各バーの上に値を表示
         for i, (bar, rate) in enumerate(zip(bars, rates)):
-            plt.text(i, rate + 0.5, 
+            plt.text(i, rate + 0.3, 
                     f'{rate:.2f}', ha='center', va='bottom', fontsize=12)
         
         plt.xlabel('Micro Circuit')
@@ -144,13 +154,15 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
         # グラフを保存
         if save_path is not None:
-            bar_save_path = save_path.replace('.png', '_bar_chart.png')
-            plt.savefig(bar_save_path)
-            mpld3.save_html(fig_bar, bar_save_path.replace(".png", ".html"))
+            base, ext = os.path.splitext(save_path)
+            bar_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_bar_chart{ext}"))
+            plt.savefig(bar_save_path, dpi=300)  # 解像度を300dpiに設定
+            html_path = os.path.normpath(os.path.join(os.path.dirname(bar_save_path), f"{os.path.basename(bar_save_path).replace('.png', '')}.html"))
+            mpld3.save_html(fig_bar, html_path)
             print(f"保存しました: {bar_save_path}")
-            print(f"保存しました: {bar_save_path.replace('.png', '.html')}")
+            print(f"保存しました: {html_path}")
         
-        plt.tight_layout()
+        # plt.tight_layout()
         return fig_bar
     
     def plot_poprate_by_layer_heatmap(all_rates):
@@ -169,7 +181,7 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
         # 層ごとのサブプロットを作成
         n_layers = len(layers)
-        fig = plt.figure(figsize=(14, 3*n_layers))
+        fig = plt.figure(figsize=(12, 8))
         fig.canvas.manager.set_window_title(title)
         
         # ヒートマップデータの整形
@@ -190,7 +202,7 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
         # カラーバーを追加
         cbar = fig.colorbar(im, ax=ax, pad=0.01)
-        cbar.set_label('Average Firing Rate (Hz)', rotation=270, labelpad=15, fontsize=25)
+        cbar.set_label("Average Firing Rate (Hz)", rotation=270, labelpad=35, fontsize=25)
         
         # 各セルに値を表示
         for i in range(len(layers)):
@@ -217,86 +229,168 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         
         # グラフを保存
         if save_path is not None:
-            layers_save_path = save_path.replace('.png', '_layers_heatmap.png')
-            plt.savefig(layers_save_path)
-            mpld3.save_html(fig, layers_save_path.replace(".png", ".html"))
+            base, ext = os.path.splitext(save_path)
+            layers_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_layers_heatmap{ext}"))
+            plt.savefig(layers_save_path, dpi=300)  # 解像度を300dpiに設定
+            html_path = os.path.normpath(os.path.join(os.path.dirname(layers_save_path), f"{os.path.basename(layers_save_path).replace('.png', '')}.html"))
+            mpld3.save_html(fig, html_path)
             print(f"保存しました: {layers_save_path}")
-            print(f"保存しました: {layers_save_path.replace('.png', '.html')}")
+            print(f"保存しました: {html_path}")
         
         return fig
     
-    def plot_popmon_time_series_by_allneurons(populationratemonitors, window_idx, current_monitors, window_title):
+    def plot_popmon_time_series_by_allneurons(monitors, window_title, enabled_mc=False):
         """
         個々のポピュレーションをプロットする内部関数
+        enabled_mc=Trueの場合、カラム別にウィンドウを分ける
         """
-        fig = plt.figure(figsize=(14, 2*len(current_monitors)))
-        fig.canvas.manager.set_window_title(window_title)
+        if not enabled_mc:
+            # 従来の動作：すべてのモニターを1つのウィンドウにプロット
+            fig = plt.figure(figsize=(14, 3*len(monitors)))
+            fig.canvas.manager.set_window_title(window_title)
+            
+            for i, mon in enumerate(monitors):
+                ax = plt.subplot(len(monitors), 1, i+1)
+                
+                # データの取得と時間範囲の制限
+                times = mon.t/ms
+                rates = mon.rate/Hz
+                mask = (times >= time_start) & (times <= time_end)
+                times = times[mask]
+                rates = rates[mask]
         
-        for i, mon in enumerate(current_monitors):
-            ax = plt.subplot(len(current_monitors), 1, i+1)
-            
-            # データの取得と時間範囲の制限
-            times = mon.t/ms
-            rates = mon.rate/Hz
-            mask = (times >= time_start) & (times <= time_end)
-            times = times[mask]
-            rates = rates[mask]
-            
-            # スムージング処理
-            if smooth_window is not None:
-                kernel = np.ones(smooth_window) / smooth_window
-                smoothed_rates = np.convolve(rates, kernel, mode='same')
-                line_smoothed = plt.plot(times, smoothed_rates, label='Smoothed')[0]
-                line_original = plt.plot(times, rates, alpha=0.3, label='Original')[0]
-                plt.legend()
+                # スムージング処理
+                if smooth_window is not None:
+                    kernel = np.ones(smooth_window) / smooth_window
+                    smoothed_rates = np.convolve(rates, kernel, mode="same")
+                    line_smoothed = plt.plot(times, smoothed_rates, label="Smoothed")[0]
+                    line_original = plt.plot(times, rates, alpha=0.3, label="Original")[0]
+                    plt.legend()
+                    
+                    # カーソルを追加（スムージング済みデータのみ）
+                    cursor_smoothed = mplcursors.cursor(line_smoothed, hover=True)
+                    
+                    @cursor_smoothed.connect("add")
+                    def on_add(sel):
+                        sel.annotation.set_text(f"Smoothed\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz")
+                else:
+                    line = plt.plot(times, rates, color="black")[0]
+                    cursor = mplcursors.cursor(line, hover=True)
+                    
+                    @cursor.connect("add")
+                    def on_add(sel):
+                        sel.annotation.set_text(f"Time: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz")
                 
-                # カーソルを追加（スムージング済みデータのみ）
-                cursor_smoothed = mplcursors.cursor(line_smoothed, hover=True)
+                # 平均発火率を計算して表示
+                avg_rate = np.mean(rates)
+                plt.axhline(y=avg_rate, color="black", linestyle="--", label=f"Avg: {avg_rate:.2f}Hz", linewidth=1)
+                plt.text(times[-1]*0.9, avg_rate*1.05, f"{avg_rate:.2f}Hz", color="black", fontsize=15, fontweight="bold", bbox=dict(facecolor="white", alpha=0.7))
                 
-                @cursor_smoothed.connect("add")
-                def on_add(sel):
-                    sel.annotation.set_text(f'Smoothed\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
-            else:
-                line = plt.plot(times, rates, color='black')[0]
-                cursor = mplcursors.cursor(line, hover=True)
-                
-                @cursor.connect("add")
-                def on_add(sel):
-                    sel.annotation.set_text(f'Time: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz')
-            
-            # 平均発火率を計算して表示
-            avg_rate = np.mean(rates)
-            plt.axhline(y=avg_rate, color='red', linestyle='--', label=f'Avg: {avg_rate:.2f}Hz')
-            plt.text(times[-1]*0.9, avg_rate*1.05, f'{avg_rate:.2f}Hz')
-            
-            # モニター名からレイヤー情報を抽出
-            if hasattr(mon, 'name'):
-                name_parts = mon.name.split('_')
-                layer_name = next((part for part in name_parts if part.startswith('L')), '')
+                # モニター名からレイヤー情報を抽出
+                name_parts = mon.name.split("_")
+                layer_name = next((part for part in name_parts if part.startswith("L")), "")
                 plt.ylabel(f"Rate (Hz)")
                 plt.title(f"{mon.name}")  # モニター名を表示
-            else:
-                plt.ylabel("Rate (Hz)")
-                plt.title(f"Monitor {i}")  # モニター番号を表示
+                    
+                if i == len(monitors)-1:
+                    plt.xlabel("Time (ms)")
                 
-            if i == len(current_monitors)-1:
-                plt.xlabel("Time (ms)")
+                plt.grid(True)
             
-            plt.grid(True)
+            plt.suptitle(window_title, fontsize=20)
+            plt.subplots_adjust(hspace=0.8)
+            # plt.tight_layout()
+            
+            if save_path is not None:
+                fig.savefig(save_path, dpi=300)  # 解像度を300dpiに設定
+                print(f"保存しました: {save_path}")
+            
+            return fig
         
-        plt.suptitle(window_title, fontsize=20)
-        plt.tight_layout()
-        
-        if save_path is not None and window_idx > 0:
-            if n_windows > 1:
-                base, ext = os.path.splitext(save_path)
-                current_save_path = f"{base}_{window_idx}{ext}"
-            else:
-                current_save_path = save_path
-            fig.savefig(current_save_path)
-            print(f"保存しました: {current_save_path}")
-        
-        return fig
+        else:
+            # enabled_mc=Trueの場合、カラム別にグループ化してウィンドウを分ける
+            # モニター名からカラム情報を抽出してグループ化
+            column_groups = {}
+            for mon in monitors:
+                name_parts = mon.name.split("_")
+                # カラム情報を抽出（例：M0, M1など）
+                column_name = next((part for part in name_parts if part.startswith("M")), "Unknown")
+                if column_name not in column_groups:
+                    column_groups[column_name] = []
+                column_groups[column_name].append(mon)
+            
+            figures = []
+            
+            # カラムごとに別々のウィンドウでプロット
+            for col_name, monitors in column_groups.items():
+                col_title = f"{window_title} - {col_name}"
+                fig = plt.figure(figsize=(14, 3*len(monitors)))
+                fig.canvas.manager.set_window_title(col_title)
+                
+                for i, mon in enumerate(monitors):
+                    ax = plt.subplot(len(monitors), 1, i+1)
+            
+                    # データの取得と時間範囲の制限
+                    times = mon.t/ms
+                    rates = mon.rate/Hz
+                    mask = (times >= time_start) & (times <= time_end)
+                    times = times[mask]
+                    rates = rates[mask]
+            
+                    # スムージング処理
+                    if smooth_window is not None:
+                        kernel = np.ones(smooth_window) / smooth_window
+                        smoothed_rates = np.convolve(rates, kernel, mode="same")
+                        line_smoothed = plt.plot(times, smoothed_rates, label="Smoothed")[0]
+                        line_original = plt.plot(times, rates, alpha=0.3, label="Original")[0]
+                        plt.legend()
+                        
+                        # カーソルを追加（スムージング済みデータのみ）
+                        cursor_smoothed = mplcursors.cursor(line_smoothed, hover=True)
+                        
+                        @cursor_smoothed.connect("add")
+                        def on_add(sel):
+                            sel.annotation.set_text(f"Smoothed\nTime: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz")
+                    else:
+                        line = plt.plot(times, rates, color="black")[0]
+                        cursor = mplcursors.cursor(line, hover=True)
+                        
+                        @cursor.connect("add")
+                        def on_add(sel):
+                            sel.annotation.set_text(f"Time: {sel.target[0]:.2f}ms\nRate: {sel.target[1]:.2f}Hz")
+            
+                    # 平均発火率を計算して表示
+                    avg_rate = np.mean(rates)
+                    plt.axhline(y=avg_rate, color="black", linestyle="--", label=f"Avg: {avg_rate:.2f}Hz", linewidth=1)
+                    plt.text(times[-1]*0.9, avg_rate*1.05, f"{avg_rate:.2f}Hz", color="black", fontsize=15, fontweight="bold", bbox=dict(facecolor="white", alpha=0.7))
+            
+                    # モニター名からレイヤー情報を抽出
+                    name_parts = mon.name.split("_")
+                    layer_name = next((part for part in name_parts if part.startswith("L")), "")
+                    plt.ylabel(f"Rate (Hz)")
+                    plt.title(f"{mon.name}")  # モニター名を表示
+                
+                    if i == len(monitors)-1:
+                        plt.xlabel("Time (ms)")
+            
+                    plt.grid(True)
+            
+                plt.suptitle(col_title, fontsize=20)
+                plt.subplots_adjust(hspace=0.8)
+                # plt.tight_layout()
+                
+                if save_path is not None:
+                    base, ext = os.path.splitext(save_path)
+                    current_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_{col_name}{ext}"))
+                    fig.savefig(current_save_path, dpi=300)  # 解像度を300dpiに設定
+                    html_path = os.path.normpath(os.path.join(os.path.dirname(current_save_path), f"{os.path.basename(current_save_path).replace('.png', '')}.html"))
+                    mpld3.save_html(fig, html_path)
+                    print(f"保存しました: {current_save_path}")
+                    print(f"保存しました: {html_path}")
+                
+                figures.append(fig)
+            
+            return figures
     
     # メイン関数の処理開始
     if not isinstance(populationratemonitors, list):
@@ -333,22 +427,23 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
             assert neuron_type == "pyr" or neuron_type == "pv" or neuron_type == "vip" or neuron_type == "sst" or neuron_type == "inh" or neuron_type == "exc", "poppulation rate plot: neuron type is not correct!(mc_id: {}, neuron_type: {})".format(mc_id, neuron_type)
             assert layer == "L23" or layer == "L4" or layer == "L5" or layer == "L6", "poppulation rate plot: layer is not correct!(mc_id: {}, layer: {})".format(mc_id, layer)
             # mc_idと層ごとにpopデータを保存
-            if mc_id not in all_rates.keys():
-                all_rates[mc_id] = {}
-            if layer not in all_rates[mc_id].keys():
-                all_rates[mc_id][layer] = {}
-            if neuron_type not in all_rates[mc_id][layer].keys():
-                all_rates[mc_id][layer][neuron_type] = rates
-            # mc_id毎にpyrニューロンのpoprateのデータを保存
-            if neuron_type == "pyr" or neuron_type == "exc":
-                print(f"mc_id: {mc_id}, layer: {layer}, neuron_type: {neuron_type}")
-                rates_mc[mc_id] += rates
-                n_popmon_e[mc_id] += 1
+            if "noise" not in mon.name.split("_"): # noiseニューロンのpoprateは保存しない
+                if mc_id not in all_rates.keys():
+                    all_rates[mc_id] = {}
+                if layer not in all_rates[mc_id].keys():
+                    all_rates[mc_id][layer] = {}
+                if neuron_type not in all_rates[mc_id][layer].keys():
+                    all_rates[mc_id][layer][neuron_type] = rates
+                # mc_id毎にpyrニューロンのpoprateのデータを保存
+                if neuron_type == "pyr" or neuron_type == "exc":
+                    rates_mc[mc_id] += rates
+                    n_popmon_e[mc_id] += 1
     
     figs = []
     if mc_enabled:
         for key in rates_mc.keys():
             rates_mc[key] = rates_mc[key]/n_popmon_e[key]
+        print(rates_mc)
         
         # カラム別population rateの推移プロット
         fig_columns, avg_rate = plot_poprate_time_series_by_column(rates_mc, times, smooth_window)
@@ -363,27 +458,13 @@ def population_rate_plot(populationratemonitors, time_end:int, time_start:int=0,
         fig_heatmap = plot_poprate_by_layer_heatmap(all_rates)
         figs.append(fig_heatmap)
     
-    # ウィンドウのサイズを計算
-    window_height = 2 * (len(populationratemonitors) + 1)  # +1 for total rate plot
-    max_height = plt.get_current_fig_manager().window.winfo_screenheight() * 0.8 / plt.rcParams['figure.dpi'] # ディスプレイの高さの80%を超える場合は、複数のウィンドウに分割
-    n_windows = max(1, int(np.ceil(window_height / max_height)))
-    
-    # 個々のポピュレーションのプロット
-    monitors_per_window = int(np.ceil(len(populationratemonitors) / n_windows))
-    for window_idx in range(n_windows):
-        start_idx = window_idx * monitors_per_window
-        end_idx = min((window_idx + 1) * monitors_per_window, len(populationratemonitors))
-        current_monitors = populationratemonitors[start_idx:end_idx]
-        
-        # ウィンドウタイトルの生成
-        if n_windows > 1:
-            window_title = f"Population Rate Plot ({window_idx+1}/{n_windows})"
-        else:
-            window_title = "Population Rate Plot"
-        
-        fig = plot_popmon_time_series_by_allneurons(populationratemonitors, window_idx, current_monitors, window_title)
+    window_title = "Population Rate Plot"
+    fig = plot_popmon_time_series_by_allneurons(populationratemonitors, window_title, enabled_mc=mc_enabled)
+    if isinstance(fig, list):
+        figs.extend(fig)
+    else:
         figs.append(fig)
-    
+        
     return figs
 
     
@@ -391,6 +472,7 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
     """
     与えられたスパイクモニターからラスタプロットを描画します。
     リストで複数のスパイクモニターを渡すと、それらを1枚のウィンドウにプロットします。
+    モニター名が'M'で始まる場合は、カラム別に分割して表示します。
     表示する際には後ろにplt.show()が必要です。
     グラフを保存するには，保存するパスを渡します。
     グラフは，pngとhtmlの2種類で保存されます。
@@ -401,6 +483,7 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
         time_end (int): プロットする時間の終了範囲(ms)
         save_path (str): 保存するパスの指定（オプション）
     """
+    window_title = "Raster plot"
     if not isinstance(spikemons, list):
         spikemons = [spikemons]
     # time_endとtime_startから単位を削除
@@ -409,29 +492,85 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
     if hasattr(time_start, 'dimensions'):
         time_start = float(time_start/ms)
         
-    # すべてのスパイクモニターを1つのウィンドウに表示
-    fig = plt.figure(figsize=(14, 2*len(spikemons)))
-    window_title = "Raster plot"
-            
-    # レイヤー情報の抽出（安全に処理）
-    if all(hasattr(mon, 'name') for mon in spikemons):
-        layer_names = []
+    # マイクロカラム（M0, M1など）が存在するか確認
+    mc_enabled = False
+    for mon in spikemons:
+        if mon.name.split("_")[0].startswith("M"):
+            mc_enabled = True
+            break
+    
+    figs = []
+    
+    if mc_enabled:
+        # カラム別にモニターをグループ化
+        column_groups = {}
         for mon in spikemons:
-            # モニター名を_で分割
-            name_parts = mon.name.split('_')
-            # L1, L23, L4などの層名を探す
-            layer = None
-            for part in name_parts:
-                if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
-                    layer = part
-                    break
-            if layer is not None:
-                layer_names.append(layer)
+            column_name = mon.name.split("_")[0]
+            if column_name not in column_groups:
+                column_groups[column_name] = []
+            column_groups[column_name].append(mon)
         
-        # 重複を除去してソート
-        unique_layers = sorted(set(layer_names))
-        if unique_layers:  # 層名が見つかった場合のみ追加
-            window_title += f" - Layers: {', '.join(unique_layers)}"
+        # カラムごとに別々のウィンドウでプロット
+        for col_name, monitors in column_groups.items():
+            col_title = f"Raster plot - {col_name}"
+            
+            fig = plt.figure(figsize=(14, 2*len(monitors)))
+            fig.canvas.manager.set_window_title(col_title)
+            plt.suptitle(col_title)
+            
+            # サブプロットを作成
+            axes = []
+            scatter_plots = []
+            for this_row in range(len(monitors)):
+                if this_row == 0:
+                    ax = plt.subplot(len(monitors), 1, this_row+1)
+                else:
+                    ax = plt.subplot(len(monitors), 1, this_row+1, sharex=axes[0])
+                axes.append(ax)
+                
+                scatter = ax.scatter(monitors[this_row].t/ms, monitors[this_row].i, 
+                                   s=1, c='k', marker='.')
+                scatter_plots.append(scatter)
+                
+                if this_row+1 == len(monitors):
+                    ax.set_xlabel('Time (ms)')
+                ax.set_xlim(time_start, time_end)
+                ax.set_ylim(-1, len(monitors[this_row].source))
+                ax.set_ylabel('Neuron index')
+                if hasattr(monitors[this_row], 'name'):
+                    ax.set_title(monitors[this_row].name)
+                else:
+                    ax.set_title(f"Monitor {this_row}")
+                    
+                plt.subplots_adjust(hspace=1)
+                    
+                if save_path is not None:
+                    base, ext = os.path.splitext(save_path)
+                    current_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_{col_name}{ext}"))
+                    plt.savefig(current_save_path)
+                    html_path = os.path.normpath(os.path.join(os.path.dirname(current_save_path), f"{os.path.basename(current_save_path).replace('.png', '')}.html"))
+                    mpld3.save_html(fig, html_path)
+                    print(f"保存しました: {current_save_path}")
+                    print(f"保存しました: {html_path}")
+            
+            # 各スキャッタープロットにカーソルを追加
+            for scatter in scatter_plots:
+                cursor = mplcursors.cursor(scatter, hover=False)
+                
+                @cursor.connect("add")
+                def on_add(sel):
+                    neuron_idx = int(sel.target[1])
+                    time = sel.target[0]
+                    sel.annotation.set_text(f'Neuron: {neuron_idx}\nTime: {time:.2f}ms')
+                    sel.annotation.xy = (sel.target[0], sel.target[1])
+            
+            plt.subplots_adjust(hspace=1.0)
+            # plt.tight_layout()
+
+    else:
+        # 従来の動作：すべてのモニターを1つのウィンドウに表示
+        fig = plt.figure(figsize=(14, 2*len(spikemons)))
+        window_title = "Raster plot"
     
     plt.suptitle(window_title)
     try:
@@ -463,6 +602,16 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
             ax.set_title(spikemons[this_row].name)
         else:
             ax.set_title(f"Monitor {this_row}")
+                
+            if save_path is not None:
+                try:
+                    plt.savefig(os.path.normpath(save_path), dpi=300)  # 解像度を300dpiに設定
+                    html_path = os.path.normpath(os.path.join(os.path.dirname(save_path), f"{os.path.basename(save_path).replace('.png', '')}.html"))
+                    mpld3.save_html(fig, html_path)
+                    print(f"保存しました: {save_path}")
+                    print(f"保存しました: {html_path}")
+                except Exception as e:
+                    print(f"ファイル保存中にエラーが発生しました: {e}")
     
     # 各スキャッタープロットにカーソルを追加
     for scatter in scatter_plots:
@@ -475,15 +624,12 @@ def raster_plot(spikemons, time_end:int, time_start:int=0, save_path:str=None):
             sel.annotation.set_text(f'Neuron: {neuron_idx}\nTime: {time:.2f}ms')
             sel.annotation.xy = (sel.target[0], sel.target[1])
     
-    plt.subplots_adjust(hspace=0.7)
-    plt.tight_layout()
+        plt.subplots_adjust(hspace=1.0)
+        # plt.tight_layout()
     
-    if save_path is not None:
-        plt.savefig(save_path)
-        mpld3.save_html(fig, save_path.replace(".png", ".html"))
-        print(f"保存しました: {save_path}")
-        print(f"保存しました: {save_path.replace('.png', '.html')}")
-    return [fig]
+    figs.append(fig)
+    
+    return figs
 
 def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuron_num:int=0, variable_names:list=None, save_path:str=None):
     """
@@ -705,19 +851,20 @@ def state_plot(statemon:StateMonitor|list, time_end:int, time_start:int=0, neuro
                 ax = sel.artist.axes
                 ax.autoscale(enable=False)
         
-        plt.subplots_adjust(hspace=0.7)
-        plt.tight_layout()
+        plt.subplots_adjust(hspace=1.0)
+        # plt.tight_layout()
         if save_path is not None:
             # 複数のモニターがある場合はファイル名に番号を付加
             if len(statemon) > 1:
                 base, ext = os.path.splitext(save_path)
-                monitor_save_path = f"{base}_{monitor.name}{ext}"
+                monitor_save_path = os.path.normpath(os.path.join(os.path.dirname(base), f"{os.path.basename(base)}_{monitor.name}{ext}"))
             else:
-                monitor_save_path = save_path
-            plt.savefig(monitor_save_path)
-            mpld3.save_html(fig, monitor_save_path.replace(".png", ".html"))
+                monitor_save_path = os.path.normpath(save_path)
+            plt.savefig(monitor_save_path, dpi=300)  # 解像度を300dpiに設定
+            html_path = os.path.normpath(os.path.join(os.path.dirname(monitor_save_path), f"{os.path.basename(monitor_save_path).replace('.png', '')}.html"))
+            mpld3.save_html(fig, html_path)
             print(f"保存しました: {monitor_save_path}")
-            print(f"保存しました: {monitor_save_path.replace('.png', '.html')}")
+            print(f"保存しました: {html_path}")
         figs.append(fig)
     
     return figs
@@ -805,8 +952,9 @@ def weight_plot(synapse, n_pre, n_post, title="", save_fig=False, save_path:str=
             for f in files:
                 os.remove(f)
                 print(f"\tDeleted {f}")
-        plt.savefig(save_path + f"{n_this_fig}.png")
-        print(f"保存しました: {os.path.join(save_path, f'wta_response_{n_this_fig}.png')}")
+        save_file_path = os.path.normpath(os.path.join(save_path, f"{n_this_fig}.png"))
+        plt.savefig(save_file_path, dpi=300)  # 解像度を300dpiに設定
+        print(f"保存しました: {save_file_path}")
         
         plt.clf()
         plt.close()
@@ -945,7 +1093,7 @@ def visualize_wta_response(input_image, synapse, spikemon, start_time:int, expos
     
     if save_path is not None:
         os.makedirs(save_path, exist_ok=True)
-        plt.savefig(os.path.join(save_path, f'wta_response_{n_this_fig}.png'))
+        plt.savefig(os.path.join(save_path, f'wta_response_{n_this_fig}.png'), dpi=300)  # 解像度を300dpiに設定
         print(f"保存しました: {os.path.join(save_path, f'wta_response_{n_this_fig}.png')}")
         plt.close()
     
@@ -954,6 +1102,7 @@ def visualize_wta_response(input_image, synapse, spikemon, start_time:int, expos
 def plot_all_monitors(network, time_end:int=None, time_start:int=0, save_dir_path:str=None, smooth_window:int=None, monitor_type:list=None):
     """
     ネットワーク内のすべてのスパイクモニター、ステートモニター、ポピュレーションレートモニターを描画します。
+    spikemon, statemon, popmonのディレクトリを作成し，その中にそれぞれのモニターを保存します。
 
     Args:
         network (dict or Network): ネットワークの辞書またはNetworkオブジェクト
@@ -971,6 +1120,14 @@ def plot_all_monitors(network, time_end:int=None, time_start:int=0, save_dir_pat
     # 文字列で渡された場合はリストに変換
     if isinstance(monitor_type, str):
         monitor_type = [monitor_type]
+        
+    # make dirs
+    if "spikemon" in monitor_type or "all" in monitor_type:
+        os.makedirs(os.path.join(save_dir_path, "spikemon"), exist_ok=True)
+    if "statemon" in monitor_type or "all" in monitor_type:
+        os.makedirs(os.path.join(save_dir_path, "statemon"), exist_ok=True)
+    if "popmon" in monitor_type or "all" in monitor_type:
+        os.makedirs(os.path.join(save_dir_path, "popmon"), exist_ok=True)
     
     # 各種モニターを分類
     spike_monitors = []
@@ -1006,58 +1163,19 @@ def plot_all_monitors(network, time_end:int=None, time_start:int=0, save_dir_pat
     
     # monitor_typeリストに基づいて描画するモニターを選択
     if "all" in monitor_type or "spikemon" in monitor_type:
-        # スパイクモニターを層ごとにグループ化
-        layer_groups = {"other": []}  # 層名がないモニターはotherグループに入れる
-        
-        for monitor in spike_monitors:
-            if hasattr(monitor, 'name'):
-                # モニター名を_で分割
-                name_parts = monitor.name.split('_')
-                # L1, L23, L4などの層名を探す
-                layer = None
-                for part in name_parts:
-                    if part.startswith('L') and (part[1:].isdigit() or (len(part) > 2 and part[1:-1].isdigit())):
-                        layer = part
-                        break
-                
-                if layer is not None:
-                    if layer not in layer_groups:
-                        layer_groups[layer] = []
-                    layer_groups[layer].append(monitor)
-                else:
-                    layer_groups["other"].append(monitor)
-            else:
-                layer_groups["other"].append(monitor)
-        
-        # 空のグループを削除
-        layer_groups = {k: v for k, v in layer_groups.items() if v}
-        
-        # 層ごとにソートしてプロット（otherは最後に）
-        # まず層を持つグループを処理
-        sorted_layers = sorted([layer for layer in layer_groups.keys() if layer != "other"])
-        
-        # 層を持つグループを処理
-        for layer in sorted_layers:
+        # スパイクモニターをプロット（レイヤー別に分ける処理を削除）
+        if spike_monitors:
             if save_dir_path is not None:
-                layer_save_path = os.path.join(save_dir_path, f'raster_plot_{layer}.png')
-                print(f"保存パス: {layer_save_path}")
+                spikemon_save_path = os.path.join(save_dir_path, 'spikemon', 'raster_plot.png')
+                print(f"保存パス: {spikemon_save_path}")
             else:
-                layer_save_path = None
-            figs.extend(raster_plot(layer_groups[layer], time_end=time_end, time_start=time_start, save_path=layer_save_path))
-        
-        # otherグループを処理
-        if "other" in layer_groups:
-            if save_dir_path is not None:
-                other_save_path = os.path.join(save_dir_path, 'raster_plot_other.png')
-                print(f"保存パス: {other_save_path}")
-            else:
-                other_save_path = None
-            figs.extend(raster_plot(layer_groups["other"], time_end=time_end, time_start=time_start, save_path=other_save_path))
+                spikemon_save_path = None
+            figs.extend(raster_plot(spike_monitors, time_end=time_end, time_start=time_start, save_path=spikemon_save_path))
     
     # ステートモニターをプロット
     if ("all" in monitor_type or "statemon" in monitor_type) and state_monitors:
         if save_dir_path is not None:
-            state_save_path = os.path.join(save_dir_path, 'state_plot.png')
+            state_save_path = os.path.join(save_dir_path, 'statemon', 'state_plot.png')
             print(f"保存パス: {state_save_path}")
         else:
             state_save_path = None
@@ -1066,7 +1184,7 @@ def plot_all_monitors(network, time_end:int=None, time_start:int=0, save_dir_pat
     # ポピュレーションレートモニターをプロット
     if ("all" in monitor_type or "popmon" in monitor_type) and population_rate_monitors:
         if save_dir_path is not None:
-            poprate_save_path = os.path.join(save_dir_path, 'population_rate_plot.png')
+            poprate_save_path = os.path.join(save_dir_path, 'popmon', 'population_rate_plot.png')
             print(f"保存パス: {poprate_save_path}")
         else:
             poprate_save_path = None

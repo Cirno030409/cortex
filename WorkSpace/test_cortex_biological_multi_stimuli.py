@@ -6,23 +6,27 @@ from Brian2_Framework.Neurons import *
 from Brian2_Framework.Plotters import *
 from Brian2_Framework.Synapses import *
 from Brian2_Framework.Tools import *
-
 import sys
 
-seeds = [0]
+seeds = [0, 1, 2, 3, 4]
 
 # コマンドライン引数からシード値を取得
+duration_arg = None
 if len(sys.argv) > 1:
     try:
         seeds = [int(sys.argv[1])]
+        duration_arg = int(sys.argv[2]) * ms
         print(f"コマンドライン引数からシード値を設定しました: {seeds[0]}")
+        print(f"コマンドライン引数からdurationを設定しました: {duration_arg}")
     except ValueError:
-        print(f"警告: 引数 '{sys.argv[1]}' を整数に変換できません。デフォルトのシード値を使用します。")
+        raise ValueError(f"警告: 引数エラーが発生しました。")
 
-for seed in seeds:
+for seed in tqdm(seeds, desc="trying seeds"):
     np.random.seed(seed)
     defaultclock.dt = 0.5*ms
     duration = 500*ms
+    if duration_arg is not None:
+        duration = duration_arg
 
 
     params = load_parameters("Brian2_Framework/parameters/Cortex_Microcircuit_multiple/params.json")

@@ -104,6 +104,12 @@ class Network_Frame(Network):
 class Jung_H_Lee_Cortex_MicroCircuit_multiple(Network_Frame):
     """
     複数の新皮質の局所回路ネットワークを接続したネットワーク。
+    
+    Methods:
+        set_input_neuron_rate(rate:float, target_mc:int): 指定された局所回路の入力ニューロンの発火率を設定します。
+        
+    Args:
+        params (dict): パラメータ
     """
     def __init__(self, params:dict):
         super().__init__()
@@ -147,6 +153,18 @@ class Jung_H_Lee_Cortex_MicroCircuit_multiple(Network_Frame):
                         self.network.add(Normal_Synapse(self.network[f"M{i}_L23_N_{from_neuron_type}"], self.network[f"M{j}_L23_N_{to_neuron_type}"], name=f"M{i}_S_{from_neuron_type}_to_M{j}_S_{to_neuron_type}", connect=True, p=1, params={"w_ave": params_mc["synapse"]["weight"]["default_exc"]["ave"], "w_std": params_mc["synapse"]["weight"]["default_exc"]["std"], "delay_ave": params_mc["synapse"]["delay"]["intra_column_exc"]["ave"], "delay_std": params_mc["synapse"]["delay"]["intra_column_exc"]["std"], "tau": params_mc["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc"))
                     else:
                         self.network.add(Normal_Synapse(self.network[f"M{i}_L23_N_{from_neuron_type}"], self.network[f"M{j}_L23_N_{to_neuron_type}"], name=f"M{i}_S_{from_neuron_type}_to_M{j}_S_{to_neuron_type}", connect=True, p=1, params={"w_ave": params_mc["synapse"]["weight"]["default_inh"]["ave"], "w_std": params_mc["synapse"]["weight"]["default_inh"]["std"], "delay_ave": params_mc["synapse"]["delay"]["intra_column_inh"]["ave"], "delay_std": params_mc["synapse"]["delay"]["intra_column_inh"]["std"], "tau": params_mc["synapse"]["decay_time"]["default_inh"]}, exc_or_inh="inh"))
+
+    def set_input_neuron_rate(self, rate:float, target_mc:int):
+        """
+        指定された局所回路の入力ニューロンの発火率を設定します。
+
+        Args:
+            rate (float): 発火率(Hz)
+            target_mc (int): 局所回路のID
+        """
+        self.network[f"M{target_mc}_N_inp"].set_rate(rate)
+        
+        
 class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
     """
     Jung H.Lee, Christof Koch, and Stefan MIhalas, 2017, "A Computational Analysis of the Function of Three Inhibitory Cell Types in Contextual Visual Processing"
@@ -194,61 +212,67 @@ class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
 
         ## External Input Neuron for spontaneous activity
         ### for L2/3
-        obj["L23_N_noise_to_pyr"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["pyr"]*params["network_scale"]), name=f"M{circuit_id}_L23_N_noise_to_pyr")
-        obj["L23_N_noise_to_pyr"].set_rate(params["ex_fibers"]["rate"]["L23"]["pyr"])
-        obj["L23_N_noise_to_pv"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]), name=f"M{circuit_id}_L23_N_noise_to_pv")
-        obj["L23_N_noise_to_pv"].set_rate(params["ex_fibers"]["rate"]["L23"]["pv"])
-        obj["L23_N_noise_to_sst"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]), name=f"M{circuit_id}_L23_N_noise_to_sst")
-        obj["L23_N_noise_to_sst"].set_rate(params["ex_fibers"]["rate"]["L23"]["sst"])
-        obj["L23_N_noise_to_vip"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]), name=f"M{circuit_id}_L23_N_noise_to_vip")
-        obj["L23_N_noise_to_vip"].set_rate(params["ex_fibers"]["rate"]["L23"]["vip"])
-        ### for Other layer
-        for layer in ["L4", "L5", "L6"]:
-            obj[f"{layer}_N_noise_to_exc"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"][layer]["exc"]*params["network_scale"]), name=f"M{circuit_id}_{layer}_N_noise_to_exc")
-            obj[f"{layer}_N_noise_to_exc"].set_rate(params["ex_fibers"]["rate"]["other"]["exc"])
-            obj[f"{layer}_N_noise_to_inh"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"][layer]["inh"]*params["network_scale"]), name=f"M{circuit_id}_{layer}_N_noise_to_inh")
-            obj[f"{layer}_N_noise_to_inh"].set_rate(params["ex_fibers"]["rate"]["other"]["inh"])
+        if params["ex_fibers"]["enable"]:
+            obj["L23_N_noise_to_pyr"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["pyr"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_L23_N_noise_to_pyr")
+            obj["L23_N_noise_to_pyr"].set_rate(params["ex_fibers"]["rate"]["L23"]["pyr"])
+            obj["L23_N_noise_to_pv"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_L23_N_noise_to_pv")
+            obj["L23_N_noise_to_pv"].set_rate(params["ex_fibers"]["rate"]["L23"]["pv"])
+            obj["L23_N_noise_to_sst"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_L23_N_noise_to_sst")
+            obj["L23_N_noise_to_sst"].set_rate(params["ex_fibers"]["rate"]["L23"]["sst"])
+            obj["L23_N_noise_to_vip"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"]["L23"]["inh"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_L23_N_noise_to_vip")
+            obj["L23_N_noise_to_vip"].set_rate(params["ex_fibers"]["rate"]["L23"]["vip"])
+            ### for Other layer
+            for layer in ["L4", "L5", "L6"]:
+                obj[f"{layer}_N_noise_to_exc"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"][layer]["exc"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_{layer}_N_noise_to_exc")
+                obj[f"{layer}_N_noise_to_exc"].set_rate(params["ex_fibers"]["rate"]["other"]["exc"])
+                obj[f"{layer}_N_noise_to_inh"] = Poisson_Input_Neuron(int(params["ex_fibers"]["num"][layer]["inh"]*params["network_scale"]*params["ex_fibers"]["num"]["scaler"]), name=f"M{circuit_id}_{layer}_N_noise_to_inh")
+                obj[f"{layer}_N_noise_to_inh"].set_rate(params["ex_fibers"]["rate"]["other"]["inh"])
         
         # シナプス作成
         ## 外部ファイバー接続
         ### L2/3
         w_ave, w_std = self.load_synaptic_weight("ex_fibers", from_exc_or_inh="exc")
         delay_ave, delay_std = self.load_synaptic_delay("exc")
-        obj["L23_S_noise_to_pyr"] = Normal_Synapse(obj["L23_N_noise_to_pyr"], obj["L23_N_pyr"], name=f"M{circuit_id}_L23_S_noise_to_pyr", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
-        obj["L23_S_noise_to_pv"] = Normal_Synapse(obj["L23_N_noise_to_pv"], obj["L23_N_pv"], name=f"M{circuit_id}_L23_S_noise_to_pv", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
-        obj["L23_S_noise_to_sst"] = Normal_Synapse(obj["L23_N_noise_to_sst"], obj["L23_N_sst"], name=f"M{circuit_id}_L23_S_noise_to_sst", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
-        obj["L23_S_noise_to_vip"] = Normal_Synapse(obj["L23_N_noise_to_vip"], obj["L23_N_vip"], name=f"M{circuit_id}_L23_S_noise_to_vip", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
-        ### Other Layer
-        for layer in ["L4", "L5", "L6"]:
+        if params["ex_fibers"]["enable"]:
             try:
-                w_ave, w_std = self.load_synaptic_weight("ex_fibers", from_exc_or_inh="exc")
-                delay_ave, delay_std = self.load_synaptic_delay("exc")
-                obj[f"{layer}_S_noise_to_exc"] = Normal_Synapse(obj[f"{layer}_N_noise_to_exc"], obj[f"{layer}_N_exc"], 
-                                                                name=f"M{circuit_id}_{layer}_S_noise_to_exc", 
-                                                                p=1, 
-                                                                connect=True, 
-                                                                params={"w_ave": w_ave, 
-                                                                       "w_std": w_std,
-                                                                       "delay_ave": delay_ave,
-                                                                       "delay_std": delay_std,
-                                                                       "tau": params["synapse"]["decay_time"]["default_exc"]}, 
-                                                                exc_or_inh="exc")
-                w_ave, w_std = self.load_synaptic_weight("ex_fibers", from_exc_or_inh="inh")
-                delay_ave, delay_std = self.load_synaptic_delay("inh")
-                obj[f"{layer}_S_noise_to_inh"] = Normal_Synapse(obj[f"{layer}_N_noise_to_inh"], 
-                                                                obj[f"{layer}_N_inh"], 
-                                                                name=f"M{circuit_id}_{layer}_S_noise_to_inh", 
-                                                                p=1, 
-                                                                connect=True, 
-                                                                params={"w_ave": w_ave, 
-                                                                       "w_std": w_std,
-                                                                       "delay_ave": delay_ave,
-                                                                       "delay_std": delay_std,
-                                                                       "tau": params["synapse"]["decay_time"]["default_exc"]}, 
-                                                                exc_or_inh="exc")
+                obj["L23_S_noise_to_pyr"] = Normal_Synapse(obj["L23_N_noise_to_pyr"], obj["L23_N_pyr"], name=f"M{circuit_id}_L23_S_noise_to_pyr", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
+                obj["L23_S_noise_to_pv"] = Normal_Synapse(obj["L23_N_noise_to_pv"], obj["L23_N_pv"], name=f"M{circuit_id}_L23_S_noise_to_pv", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
+                obj["L23_S_noise_to_sst"] = Normal_Synapse(obj["L23_N_noise_to_sst"], obj["L23_N_sst"], name=f"M{circuit_id}_L23_S_noise_to_sst", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
+                obj["L23_S_noise_to_vip"] = Normal_Synapse(obj["L23_N_noise_to_vip"], obj["L23_N_vip"], name=f"M{circuit_id}_L23_S_noise_to_vip", connect=True, p=1, params={"w_ave": w_ave, "w_std": w_std, "delay_ave": delay_ave, "delay_std": delay_std, "tau": params["synapse"]["decay_time"]["default_exc"]}, exc_or_inh="exc")
             except KeyError:
-                print(f"シナプス接続が存在しません: {layer}_S_noise_to_exc")
-                continue
+                print(f"シナプス接続が存在しません: L23_S_noise_to_pyr")
+                pass
+            ### Other Layer
+            for layer in ["L4", "L5", "L6"]:
+                try:
+                    w_ave, w_std = self.load_synaptic_weight("ex_fibers", from_exc_or_inh="exc")
+                    delay_ave, delay_std = self.load_synaptic_delay("exc")
+                    obj[f"{layer}_S_noise_to_exc"] = Normal_Synapse(obj[f"{layer}_N_noise_to_exc"], obj[f"{layer}_N_exc"], 
+                                                                    name=f"M{circuit_id}_{layer}_S_noise_to_exc", 
+                                                                    p=1, 
+                                                                    connect=True, 
+                                                                    params={"w_ave": w_ave, 
+                                                                        "w_std": w_std,
+                                                                        "delay_ave": delay_ave,
+                                                                        "delay_std": delay_std,
+                                                                        "tau": params["synapse"]["decay_time"]["default_exc"]}, 
+                                                                    exc_or_inh="exc")
+                    w_ave, w_std = self.load_synaptic_weight("ex_fibers", from_exc_or_inh="inh")
+                    delay_ave, delay_std = self.load_synaptic_delay("inh")
+                    obj[f"{layer}_S_noise_to_inh"] = Normal_Synapse(obj[f"{layer}_N_noise_to_inh"], 
+                                                                    obj[f"{layer}_N_inh"], 
+                                                                    name=f"M{circuit_id}_{layer}_S_noise_to_inh", 
+                                                                    p=1, 
+                                                                    connect=True, 
+                                                                    params={"w_ave": w_ave, 
+                                                                        "w_std": w_std,
+                                                                        "delay_ave": delay_ave,
+                                                                        "delay_std": delay_std,
+                                                                        "tau": params["synapse"]["decay_time"]["default_exc"]}, 
+                                                                    exc_or_inh="exc")
+                except KeyError:
+                    print(f"シナプス接続が存在しません: {layer}_S_noise_to_exc")
+                    continue
 
         # Input neuron 接続
         obj["S_inp_to_L4_exc"] = Normal_Synapse(obj["N_inp"], obj["L4_N_exc"], name=f"M{circuit_id}_S_inp_to_L4_exc", connect=True, p=params["synapse"]["conn_probability"]["inp->exc"]["L4"], params={"w_ave": params["synapse"]["weight"]["default_exc"]["ave"], "w_std": params["synapse"]["weight"]["default_exc"]["std"], "tau": params["synapse"]["decay_time"]["default_exc"], "delay_ave": params["synapse"]["delay"]["intra_column_exc"]["ave"], "delay_std": params["synapse"]["delay"]["intra_column_exc"]["std"]}, exc_or_inh="exc")
@@ -272,8 +296,8 @@ class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
                         ## pv, sst, vip, inhからのシナプスは抑制にする
                         if from_neuron_type == "inh":
                             from_exc_or_inh = "inh"
-                        ## pyrからのシナプスは興奮にする
-                        elif from_neuron_type == "exc":
+                        ## pyrとexcからのシナプスは興奮にする
+                        elif from_neuron_type == "pyr" or from_neuron_type == "exc":
                             from_exc_or_inh = "exc"
                         else:
                             raise ValueError("from_neuron_typeが不正です。")
@@ -289,18 +313,23 @@ class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
                                 ## L2/3層同士のシナプス接続を作成
                                 for from_l23_neuron_type in l23_neuron_types:
                                     for to_l23_neuron_type in l23_neuron_types:
+                                        # from_l23_neuron_typeに基づいてfrom_exc_or_inhを再設定
+                                        if from_l23_neuron_type == "pv" or from_l23_neuron_type == "sst" or from_l23_neuron_type == "vip":
+                                            from_exc_or_inh = "inh"
+                                        elif from_l23_neuron_type == "pyr":
+                                            from_exc_or_inh = "exc"
                                         w_ave, w_std = self.load_synaptic_weight(from_layer, from_l23_neuron_type, to_l23_neuron_type, from_exc_or_inh)
                                         delay_ave, delay_std = self.load_synaptic_delay(from_exc_or_inh)
                                         decay_time = self.load_synaptic_decay_time(from_l23_neuron_type, to_l23_neuron_type, from_exc_or_inh, to_exc_or_inh)
                                         ### 接続確率を取得
                                         if from_l23_neuron_type == "pyr" and to_l23_neuron_type == "sst": # pyr -> sst
-                                            p = params["synapse"]["conn_probability"]["3inh"]["pyr->sst"]
+                                            p = params["synapse"]["conn_probability"]["exc->inh"]["L23"]["L23"]
                                         elif from_l23_neuron_type == "pyr" and to_l23_neuron_type == "pv": # pyr -> pv
-                                            p = params["synapse"]["conn_probability"]["3inh"]["pyr->pv"]
+                                            p = params["synapse"]["conn_probability"]["exc->exc"]["L23"]["L23"]
                                         elif from_l23_neuron_type == "pv" and to_l23_neuron_type == "pyr": # pv -> pyr
-                                            p = params["synapse"]["conn_probability"]["3inh"]["pv->pyr"]
+                                            p = params["synapse"]["conn_probability"]["inh->exc"]["L23"]["L23"]
                                         elif from_l23_neuron_type == "pyr" and to_l23_neuron_type == "pyr": # pyr -> pyr
-                                            p = params["synapse"]["conn_probability"]["3inh"]["pyr->pyr"]
+                                            p = params["synapse"]["conn_probability"]["exc->exc"]["L23"]["L23"]
                                         else:
                                             p = params["synapse"]["conn_probability"][f"{from_exc_or_inh}->{to_exc_or_inh}"][from_layer][to_layer]
                                         try:
@@ -320,24 +349,35 @@ class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
                                                                                                                                 "tau": decay_time},
                                                                                                                         exc_or_inh=from_exc_or_inh) 
                             elif from_layer == "L23" and not to_layer == "L23" :
-                                ## L2/3層からのシナプス接続を作成
-                                for from_inh_neuron_type in l23_neuron_types:
-                                    w_ave, w_std = self.load_synaptic_weight(from_layer, from_inh_neuron_type, to_neuron_type, from_exc_or_inh)
+                                ## L2/3層からL4,L5,L6層へのシナプス接続を作成
+                                for from_l23_neuron_type in l23_neuron_types:
+                                    # from_l23_neuron_typeに基づいてfrom_exc_or_inhを再設定
+                                    if from_l23_neuron_type == "pv" or from_l23_neuron_type == "sst" or from_l23_neuron_type == "vip":
+                                        from_exc_or_inh = "inh"
+                                    elif from_l23_neuron_type == "pyr":
+                                        from_exc_or_inh = "exc"
+                                    w_ave, w_std = self.load_synaptic_weight(from_layer, from_l23_neuron_type, to_neuron_type, from_exc_or_inh)
                                     delay_ave, delay_std = self.load_synaptic_delay(from_exc_or_inh)
-                                    decay_time = self.load_synaptic_decay_time(from_inh_neuron_type, to_neuron_type, from_exc_or_inh, to_exc_or_inh)
-                                    obj[f"{from_layer}_S_{from_inh_neuron_type}_to_{to_layer}_{to_neuron_type}"] = Normal_Synapse(obj[f"{from_layer}_N_{from_inh_neuron_type}"], 
+                                    decay_time = self.load_synaptic_decay_time(from_l23_neuron_type, to_neuron_type, from_exc_or_inh, to_exc_or_inh)
+                                    # L23 Pyrのみweighting factorを設定
+                                    if from_l23_neuron_type == "pyr":
+                                        weighting_factor = params["synapse"]["weighting_factor"]["pyr->all"]
+                                    else:
+                                        weighting_factor = 1
+                                    obj[f"{from_layer}_S_{from_l23_neuron_type}_to_{to_layer}_{to_neuron_type}"] = Normal_Synapse(obj[f"{from_layer}_N_{from_l23_neuron_type}"], 
                                                                                                                         obj[f"{to_layer}_N_{to_neuron_type}"], 
-                                                                                                                        name=f"M{circuit_id}_{from_layer}_S_{from_inh_neuron_type}_to_{circuit_id}_{to_layer}_{to_neuron_type}", 
+                                                                                                                        name=f"M{circuit_id}_{from_layer}_S_{from_l23_neuron_type}_to_{circuit_id}_{to_layer}_{to_neuron_type}", 
                                                                                                                         connect=True, 
                                                                                                                         p=params["synapse"]["conn_probability"][f"{from_exc_or_inh}->{to_exc_or_inh}"][from_layer][to_layer], # 接続確率
                                                                                                                         params={"w_ave": w_ave,
                                                                                                                                 "w_std": w_std,
                                                                                                                                 "delay_ave": delay_ave,
                                                                                                                                 "delay_std": delay_std,
-                                                                                                                                "tau": decay_time},
+                                                                                                                                "tau": decay_time,
+                                                                                                                                "weighting_factor": weighting_factor},
                                                                                                                         exc_or_inh=from_exc_or_inh)
                             elif to_layer == "L23" and not from_layer == "L23" :
-                                ## L2/3層へのシナプス接続を作成
+                                ## L4,L5,L6層からL2/3層へのシナプス接続を作成
                                 for to_l23_neuron_type in l23_neuron_types:
                                     w_ave, w_std = self.load_synaptic_weight(from_layer, from_neuron_type, to_l23_neuron_type, from_exc_or_inh)
                                     delay_ave, delay_std = self.load_synaptic_delay(from_exc_or_inh)
@@ -378,7 +418,7 @@ class Jung_H_Lee_Cortex_MicroCircuit(Network_Frame):
             try:
                 self.network.add(SpikeMonitor(obj[key], record=params["monitor"][key], name=f"M{circuit_id}_spikemon_{key}"))
                 if not isinstance(obj[key], Poisson_Input_Neuron):
-                    self.network.add(StateMonitor(obj[key], ["Ie", "Ii", "v"], record=0, name=f"M{circuit_id}_statemon_{key}"))
+                    self.network.add(StateMonitor(obj[key], ["Ie", "Ii", "v"], record=0, name=f"M{circuit_id}_statemon_{key}", when='before_thresholds'))
             except KeyError:
                 print(f"モニターが存在しません: {key}")
                 continue
