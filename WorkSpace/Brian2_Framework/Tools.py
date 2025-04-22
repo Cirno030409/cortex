@@ -11,7 +11,7 @@ import time
 import shutil
 import numpy as np
 import re
-from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData
+from Brian2_Framework.Monitors import SpikeMonitorData, StateMonitorData, PopulationRateMonitorData
 from brian2 import SpikeMonitor
 import matplotlib
 import matplotlib.pyplot as plt

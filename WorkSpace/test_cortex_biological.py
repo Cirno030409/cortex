@@ -2,9 +2,7 @@ from brian2 import *
 from tqdm import tqdm
 
 from Brian2_Framework.Networks import *
-from Brian2_Framework.Neurons import *
 from Brian2_Framework.Plotters import *
-from Brian2_Framework.Synapses import *
 from Brian2_Framework.Tools import *
 
 seed = 0

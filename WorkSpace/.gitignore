@@ -1,5 +1,6 @@
 examined_data
 saved_network
+process_control_config.json
 *.pyc
 *.key
 data

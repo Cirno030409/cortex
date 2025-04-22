@@ -149,7 +149,6 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
                 net.network["M0_L23_N_pyr"].I_noise = I_pyr
                 net.network["M0_L23_N_vip"].I_noise = I_vip
                 net.network["M0_L23_N_pv"].I_noise = I_pv
-                save_dir = os.path.join(save_dir, "current input mode")
             net.run(duration, report="text")
             rates_L23_pyr.append(get_population_rate(net.network["M0_spikemon_L23_N_pyr"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(12, 10))
@@ -157,6 +156,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_pyr/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of Pyr cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of Pyr cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of Pyr cell while increasing current input to SST cell.html"))
@@ -172,6 +173,10 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         rates_L6_exc = []
         for i, current in tqdm(enumerate(input_currents), desc="input_current progress", dynamic_ncols=True, total=len(input_currents)):
             net.network["M0_L23_N_sst"].I_noise = current
+            if current_input_mode:
+                net.network["M0_L23_N_pyr"].I_noise = I_pyr
+                net.network["M0_L23_N_vip"].I_noise = I_vip
+                net.network["M0_L23_N_pv"].I_noise = I_pv
             net.run(duration, report="text")
             rates_L4_exc.append(get_population_rate(net.network["M0_spikemon_L4_N_exc"], start_time=duration*i, end_time=duration*(i+1)))
             rates_L5_exc.append(get_population_rate(net.network["M0_spikemon_L5_N_exc"], start_time=duration*i, end_time=duration*(i+1)))
@@ -181,6 +186,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L4_exc/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of exc cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of exc cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of exc cell while increasing current input to SST cell.html"))
@@ -196,6 +203,10 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         rates_L6_inh = []
         for i, current in tqdm(enumerate(input_currents), desc="input_current progress", dynamic_ncols=True, total=len(input_currents)):
             net.network["M0_L23_N_sst"].I_noise = current
+            if current_input_mode:
+                net.network["M0_L23_N_pyr"].I_noise = I_pyr
+                net.network["M0_L23_N_vip"].I_noise = I_vip
+                net.network["M0_L23_N_pv"].I_noise = I_pv
             net.run(duration, report="text")
             rates_L4_inh.append(get_population_rate(net.network["M0_spikemon_L4_N_inh"], start_time=duration*i, end_time=duration*(i+1)))
             rates_L5_inh.append(get_population_rate(net.network["M0_spikemon_L5_N_inh"], start_time=duration*i, end_time=duration*(i+1)))
@@ -205,6 +216,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L4_inh/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of inh cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of inh cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of inh cell while increasing current input to SST cell.html"))
@@ -218,6 +231,9 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         rates_L23_vip = []
         for i, current in tqdm(enumerate(input_currents), desc="input_current progress", dynamic_ncols=True, total=len(input_currents)):
             net.network["M0_L23_N_sst"].I_noise = current
+            if current_input_mode:
+                net.network["M0_L23_N_pyr"].I_noise = I_pyr
+                net.network["M0_L23_N_pv"].I_noise = I_pv
             net.run(duration, report="text")
             rates_L23_vip.append(get_population_rate(net.network["M0_spikemon_L23_N_vip"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(10, 10))
@@ -225,6 +241,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_vip/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of vip cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of vip cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of vip cell while increasing current input to SST cell.html"))
@@ -238,6 +256,9 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         rates_L23_pv = []
         for i, current in tqdm(enumerate(input_currents), desc="input_current progress", dynamic_ncols=True, total=len(input_currents)):
             net.network["M0_L23_N_sst"].I_noise = current
+            if current_input_mode:
+                net.network["M0_L23_N_pyr"].I_noise = I_pyr
+                net.network["M0_L23_N_vip"].I_noise = I_vip
             net.run(duration, report="text")
             rates_L23_pv.append(get_population_rate(net.network["M0_spikemon_L23_N_pv"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(10, 10))
@@ -245,6 +266,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_pv/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of pv cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of pv cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of pv cell while increasing current input to SST cell.html"))
@@ -262,7 +285,6 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
                 net.network["M0_L23_N_pyr"].I_noise = I_pyr
                 net.network["M0_L23_N_vip"].I_noise = I_vip
                 net.network["M0_L23_N_pv"].I_noise = I_pv
-                save_dir = os.path.join(save_dir, "current input mode")
             net.run(duration, report="text")
             rates_L23_sst.append(get_population_rate(net.network["M0_spikemon_L23_N_sst"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(10, 10))
@@ -270,6 +292,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_sst/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to SST cell (pA)")
         ylabel("Firing rate of SST cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of SST cell while increasing current input to SST cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of SST cell while increasing current input to SST cell.html"))
@@ -287,7 +311,6 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
                 net.network["M0_L23_N_pyr"].I_noise = I_pyr
                 net.network["M0_L23_N_sst"].I_noise = I_sst
                 net.network["M0_L23_N_pv"].I_noise = I_pv
-                save_dir = os.path.join(save_dir, "current input mode")
             net.run(duration, report="text")
             rates_L23_pyr.append(get_population_rate(net.network["M0_spikemon_L23_N_pyr"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(10, 10))
@@ -295,6 +318,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_pyr/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to VIP cell (pA)")
         ylabel("Firing rate of Pyr cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of Pyr cell while increasing current input to VIP cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of Pyr cell while increasing current input to VIP cell.html"))
@@ -308,6 +333,9 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         rates_L23_sst = []
         for i, current in tqdm(enumerate(input_currents), desc="input_current progress", dynamic_ncols=True, total=len(input_currents)):
             net.network["M0_L23_N_vip"].I_noise = current
+            if current_input_mode:
+                net.network["M0_L23_N_pyr"].I_noise = I_pyr
+                net.network["M0_L23_N_pv"].I_noise = I_pv
             net.run(duration, report="text")
             rates_L23_sst.append(get_population_rate(net.network["M0_spikemon_L23_N_sst"], start_time=duration*i, end_time=duration*(i+1)))
         fig = figure(figsize=(10, 10))
@@ -315,6 +343,8 @@ for seed in tqdm(seeds, desc="trying seeds", dynamic_ncols=True, total=len(seeds
         plot(input_currents/pA, rates_L23_sst/Hz, marker=".", markersize=5, color="black")
         xlabel("Current input to VIP cell (pA)")
         ylabel("Firing rate of SST cell (Hz)")
+        if current_input_mode:
+            save_dir = os.path.join(save_dir, "current input mode")
         os.makedirs(save_dir, exist_ok=True)
         savefig(os.path.join(save_dir, "Firing rate of SST cell while increasing current input to VIP cell.png"), dpi=300)
         mpld3.save_html(fig, os.path.join(save_dir, "Firing rate of SST cell while increasing current input to VIP cell.html"))

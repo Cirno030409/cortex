@@ -1275,25 +1275,45 @@ exit $EXIT_CODE' > {output_file} 2>&1 & echo $!"""
                 except subprocess.TimeoutExpired:
                     process.kill()
             
-            # 新しいプロセスを起動
-            cmd = ["python", process_info["file"]] + process_info["args"]
+            # 実行場所を取得
+            location = process_info.get("location", "local")
+            
+            # SSH実行の場合、接続を確認
+            if location == "remote" and not self.is_ssh_connected:
+                if len(selected_items) == 1:  # 単一選択の場合のみ個別メッセージ
+                    if not messagebox.askyesno("SSH接続エラー", "SSH接続が失われています。ローカル実行に切り替えますか？"):
+                        # キャンセルされた場合、処理をスキップ
+                        continue
+                    else:
+                        location = "local"  # ローカル実行に切り替え
+                else:
+                    # 複数選択の場合は自動的にローカル実行に切り替え
+                    location = "local"
+            
             try:
-                # 環境変数を設定（UTF-8を使用）
-                env = os.environ.copy()
-                env['PYTHONIOENCODING'] = 'utf-8'
-                
-                new_process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8',  # 明示的にUTF-8を指定
-                    errors='replace',  # エラー発生時は代替文字に置き換える
-                    bufsize=1,
-                    universal_newlines=True,
-                    env=env,  # 環境変数を渡す
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
+                output_file = None
+                # 実行場所に応じてプロセスを起動
+                if location == "remote":
+                    # リモート実行
+                    new_process, output_file = self.execute_remote_process(process_info["file"], process_info["args"])
+                else:
+                    # ローカル実行
+                    # 環境変数を設定（UTF-8を使用）
+                    env = os.environ.copy()
+                    env['PYTHONIOENCODING'] = 'utf-8'
+                    
+                    new_process = subprocess.Popen(
+                        [sys.executable, process_info["file"]] + process_info["args"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding='utf-8',  # 明示的にUTF-8を指定
+                        errors='replace',  # エラー発生時は代替文字に置き換える
+                        bufsize=1,
+                        universal_newlines=True,
+                        env=env,  # 環境変数を渡す
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
                 
                 # 現在の時間
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1319,6 +1339,10 @@ exit $EXIT_CODE' > {output_file} 2>&1 & echo $!"""
                 self.processes[process_id]["output"] = []
                 self.processes[process_id]["pid"] = new_process.pid
                 self.processes[process_id]["manually_stopped"] = False  # 手動停止フラグをリセット
+                self.processes[process_id]["location"] = location  # 実行場所を保持
+                
+                # 実行場所の表示テキスト
+                location_display = "ローカル実行" if location == "local" else "SSH実行"
                 
                 # Treeviewを更新（タグもリセット）
                 self.process_tree.item(
@@ -1329,6 +1353,7 @@ exit $EXIT_CODE' > {output_file} 2>&1 & echo $!"""
                         " ".join(process_info["args"]) if process_info["args"] else "",
                         "実行中",
                         "",  # 進捗バー表示をリセット
+                        location_display,  # 実行場所を表示
                         "",  # 進捗テキスト表示をリセット
                         now,
                         new_process.pid,
@@ -1337,10 +1362,15 @@ exit $EXIT_CODE' > {output_file} 2>&1 & echo $!"""
                     tags=()  # エラーを示すタグをクリア
                 )
                 
-                # 出力読み取りスレッドを開始
-                t = threading.Thread(target=self.read_output, args=(process_id,))
-                t.daemon = True
-                t.start()
+                # 実行場所に応じて出力の監視方法を変更
+                if location == "remote":
+                    # リモート出力ファイルの読み取りを開始
+                    self.root.after(1000, self.read_remote_output, process_id, output_file)
+                else:
+                    # ローカルの場合は通常の出力読み取りスレッドを開始
+                    t = threading.Thread(target=self.read_output, args=(process_id,))
+                    t.daemon = True
+                    t.start()
                 
                 # プロセス監視スレッドを開始
                 t2 = threading.Thread(target=self.monitor_process, args=(process_id,))
